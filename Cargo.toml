@@ -1,0 +1,39 @@
+[package]
+name = "mmd"
+version = "0.0.0"
+edition = "2024"
+# Tracks latest stable, pinned in rust-toolchain.toml.
+rust-version = "1.97"
+description = "Lean pure-Rust Mermaid diagram renderer producing SVG for web and PDF publication"
+repository = "https://github.com/grahambrooks/mmd"
+license = "MIT"
+# No crates.io until beta.
+publish = false
+
+[features]
+default = ["bundled-fonts"]
+# Text measurement using fonts compiled into the binary. Turn off to supply
+# your own `Measure` implementation and drop the font payload.
+bundled-fonts = ["dep:rustybuzz", "dep:typst-assets"]
+cli = ["dep:clap", "bundled-fonts"]
+
+[dependencies]
+rustybuzz = { version = "0.20", optional = true }
+typst-assets = { version = "0.15.1", features = ["fonts"], optional = true }
+clap = { version = "4.6", features = ["derive"], optional = true }
+
+[dev-dependencies]
+# The PDF showcase only; the library itself never depends on a PDF stack.
+krilla = "0.8"
+krilla-svg = "0.8"
+usvg = "0.47"
+typst-assets = { version = "0.15.1", features = ["fonts"] }
+ttf-parser = "0.25.1"
+
+[[bin]]
+name = "mmd"
+path = "src/bin/mmd.rs"
+required-features = ["cli"]
+
+[[example]]
+name = "showcase"

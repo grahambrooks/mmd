@@ -1,0 +1,11 @@
+C4Context
+    title System context for md2pdf
+    Person(author, "Author", "Writes Markdown with embedded diagrams")
+    System(md2pdf, "md2pdf", "Converts GitHub Flavored Markdown to PDF")
+    System(mmd, "mmd", "Renders Mermaid diagrams to SVG")
+    SystemDb(fonts, "Embedded fonts", "Compiled into the binary")
+    System_Ext(reader, "PDF reader", "Displays the published document")
+    Rel(author, md2pdf, "runs")
+    Rel(md2pdf, mmd, "renders diagrams", "SVG")
+    Rel(md2pdf, fonts, "measures with")
+    Rel(md2pdf, reader, "produces PDF")
