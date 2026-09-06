@@ -3,7 +3,7 @@ name = "mmd"
 version = "0.0.0"
 edition = "2024"
 # Tracks latest stable, pinned in rust-toolchain.toml.
-rust-version = "1.97"
+rust-version = "1.98.1"
 description = "Lean pure-Rust Mermaid diagram renderer producing SVG for web and PDF publication"
 repository = "https://github.com/grahambrooks/mmd"
 license = "MIT"
