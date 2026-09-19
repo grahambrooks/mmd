@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "mmd"
-version = "0.0.0"
+version = "2026.9.0"
 dependencies = [
  "clap",
  "krilla",
