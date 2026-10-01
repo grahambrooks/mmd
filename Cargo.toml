@@ -1,6 +1,6 @@
 [package]
 name = "mmd"
-version = "2026.9.1"
+version = "2026.10.1"
 edition = "2024"
 # Tracks latest stable, pinned in rust-toolchain.toml.
 rust-version = "1.98.1"
