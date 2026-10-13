@@ -90,33 +90,69 @@ any `*_Boundary`; `Container*`/`Component*`/`Node*` elements; `BiRel` and the
 directional `Rel_U`/`Rel_D`/`Rel_L`/`Rel_R`/`Rel_Back`; `UpdateElementStyle`
 and `UpdateLayoutConfig`.
 
+### flowchart
+
+```
+flowchart LR
+    A[Start] --> B{Decide}
+    B -->|yes| C([Done])
+    B -- no --> D[[Retry]]
+    subgraph tools [Tools]
+        C & D --> E[(Store)]
+    end
+    classDef hot fill:#f96,stroke:#333
+    class B hot
+```
+
+`graph` is accepted for `flowchart`. Directions `TB`/`TD`, `BT`, `LR`, `RL`.
+Shapes: `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`, `[(cylinder)]`,
+`((circle))`, `(((double circle)))`, `>flag]`, `{rhombus}`, `{{hexagon}}`,
+`[/parallelogram/]`, `[\alt\]`, `[/trapezoid\]`, `[\alt/]`; labels may be
+quoted and use `<br>`. Links: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`,
+`--o`, `--x`, `<-->`, `o--o`, `x--x`, with `|label|` or `-- label -->` text.
+Chains (`A --> B --> C`), `&` lists, `;` between statements, nested
+`subgraph id [title]` … `end`, `classDef`, `class`, `:::class` and `style`
+(fill, stroke, color, stroke-dasharray).
+
+**Not supported (ignored):** `click`, `linkStyle`, a subgraph's own
+`direction`, and styles on subgraphs. Markdown in labels is shown as text.
+
+Layout is layered (`src/layered.rs`, written for this crate rather than
+porting dagre): cycles broken by reversing back edges, longest-path ranks two
+apart so every edge has an in-between rank for its label, dummy points for
+long edges, barycentre sweeps that keep subgraph members together and keep the
+ordering with fewest crossings, and isotonic regression across each rank. Links
+leave and arrive along the flow, spread across a node's side in the order their
+other ends lie.
+
 ## Architecture
 
 ```
-source ──parse──> diagram model ──layout──> scene ──render──> SVG
+source ──parse──> diagram model ──layout──> Scene ──diagram_scene::svg──> SVG
+                                              └──> a host's own painter
 ```
 
-Each diagram type owns its own `parse`, `layout` and `render`, and shares only
-the base:
+Each diagram type owns its own `parse` and `layout`. The scene is
+[`diagram-scene`](https://github.com/grahambrooks/diagram-scene)'s, shared
+with puml and forge: nodes with semantic shapes, containers, routed edges with
+markers and labels, colours as theme roles. That crate also holds the shapes'
+outlines, edge routing helpers and the SVG writer, so every consumer draws a
+scene the same way.
 
 | Module | Role |
 |:---|:---|
-| `svg` | An SVG element builder. Escaping and attribute writing live here, nowhere else. |
-| `text` | The `Measure` trait, and a bundled-font implementation over `rustybuzz`. |
-| `theme` | Palette and font settings, as data. |
-| `geom` | Points, sizes, rectangles. |
+| `text` | `wrap`, and a bundled-font `Measure` over `rustybuzz`. |
+| `layered` | The layered graph layout flowcharts use. |
 
-`layout` produces a **scene** — positioned shapes and text in diagram
-coordinates — which `render` writes out. Keeping that split means layout is
-testable without string-matching SVG, and a future consumer could draw a scene
-directly instead of going through SVG at all.
+Layout is testable without string-matching SVG, and a host (the emx editor)
+draws the scene natively instead of going through SVG at all.
 
 ### Adding a diagram type
 
 1. `src/<type>/parse.rs` — source to a model, with errors carrying line numbers.
-2. `src/<type>/layout.rs` — model to a `Scene`, using `Measure` for text.
-3. `src/<type>/render.rs` — usually a thin call into the shared scene writer.
-4. Register the type's keyword in `detect()` in `lib.rs`.
+2. `src/<type>/layout.rs` — model to a `diagram_scene::Scene`, using `Measure`
+   for text.
+3. Register the type's keyword in `detect()` and `scene()` in `lib.rs`.
 5. Add a sample to `examples/` and a case to the showcase.
 
 Nothing else in the crate should need to change.
@@ -137,8 +173,9 @@ The structural finding that shaped this project: **the advanced diagram types
 are the cheap ones.** In sebastian, C4 is 618 lines and gitGraph 1,364, and
 neither needs the graph-layout engine — they do their own layout and need only
 an SVG writer and a text measurer. Only flowchart, state, class, ER and block
-need `dagre` (~4,000 lines with `graphlib`), which is why those are not in v1
-and why their absence costs nothing on the path to the rest.
+need `dagre` (~4,000 lines with `graphlib`). Flowcharts use a compact layered
+layout of this crate's own instead (`src/layered.rs`, about 500 lines with its
+tests).
 
 No sebastian code is copied; the layouts here are written from the mermaid
 sources in `mermaid/` and from its rendered output. Sebastian is MIT, so

@@ -1,0 +1,18 @@
+flowchart TD
+    %% A request through the editor's preview pipeline.
+    edit([Keystroke]) --> buffer[Buffer changes]
+    buffer --> debounce{Paused 150 ms?}
+    debounce -->|no| buffer
+    debounce -->|yes| worker[[Render on a worker]]
+    subgraph tools [The user's crates]
+        worker --> mmd[mmd: Mermaid]
+        worker --> puml[puml: PlantUML]
+        worker --> forge[forge: architecture]
+    end
+    mmd & puml & forge --> scene[(Scene)]
+    scene ==> paint>Paint natively]
+    scene -.-> svg[/SVG for files/]
+    paint --o done((Shown))
+    svg --x failed{{Unsupported}}
+    classDef hot fill:#f9d77e,stroke:#b8860b,color:#222
+    class debounce hot

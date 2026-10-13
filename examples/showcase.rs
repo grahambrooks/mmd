@@ -41,10 +41,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             source: include_str!("gitgraph.mmd"),
         },
         Sample {
+            heading: "flowchart",
+            prose: "Nodes are ranked along the flow by a layered layout that keeps \
+                    crossings down and subgraph members together; links are smooth \
+                    curves that leave and arrive square to the flow.",
+            source: include_str!("flowchart.mmd"),
+        },
+        Sample {
             heading: "C4Context",
-            prose: "Elements are placed on a grid in declaration order and relationships \
-                    drawn as straight arrows between box edges. Labels knock out the \
-                    background behind them so they stay readable where they cross a line.",
+            prose: "Elements are placed on a grid in declaration order, and relationships \
+                    curve between the sides that face each other. Labels sit on pills \
+                    so they stay readable where they cross a line.",
             source: include_str!("c4.mmd"),
         },
     ];

@@ -5,21 +5,7 @@
 //! font stack (md2pdf does) can implement [`Measure`] and drop the bundled
 //! fonts with `--no-default-features`.
 
-/// Measures text the way the eventual renderer will draw it.
-pub trait Measure {
-    /// Advance width of `text` at `size` px.
-    fn width(&self, text: &str, size: f32, bold: bool) -> f32;
-
-    /// Baseline-to-baseline distance at `size` px.
-    fn line_height(&self, size: f32) -> f32 {
-        size * 1.35
-    }
-
-    /// Distance from the top of a line box down to its baseline.
-    fn ascent(&self, size: f32) -> f32 {
-        size * 0.8
-    }
-}
+pub use diagram_scene::Measure;
 
 /// Wrap `text` to at most `max_width`, breaking on spaces.
 ///

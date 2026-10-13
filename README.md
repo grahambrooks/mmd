@@ -4,7 +4,7 @@ Render [Mermaid](https://mermaid.js.org) diagrams to SVG, for web and PDF
 publication. Pure Rust: no Node, no browser, no JavaScript runtime, no C
 toolchain.
 
-> **Status:** early development. gitGraph and C4 context diagrams render; see
+> **Status:** early development. Flowcharts, gitGraph and C4 context diagrams render; see
 > [DESIGN.md](DESIGN.md) for the exact supported syntax and for what is
 > deliberately out of scope.
 
@@ -34,6 +34,14 @@ As a library:
 let svg = mmd::render("gitGraph\n  commit\n  branch dev\n  commit\n")?;
 ```
 
+Or as a laid-out [`diagram-scene`](https://github.com/grahambrooks/diagram-scene)
+`Scene` (shapes, routed edges and theme roles) for a host that draws it
+natively in its own colours, as the emx editor does:
+
+```rust
+let scene = mmd::scene(source, &my_measure)?;
+```
+
 Text is measured by shaping real fonts, so a label never overflows the box
 drawn around it. Hosts with their own font stack can implement the `Measure`
 trait and drop the bundled fonts entirely:
@@ -46,6 +54,7 @@ mmd = { version = "*", default-features = false }
 
 | Diagram | Supported |
 |:---|:---|
+| `flowchart`/`graph` | `TB`/`TD`/`BT`/`LR`/`RL`; every node shape; `-->`, `---`, `-.->`, `==>`, `--o`, `--x`, `<-->` with `\|labels\|` or `-- text -->`; chains and `&`; nested `subgraph`; `classDef`, `class`, `:::`, `style` |
 | `gitGraph` | `commit` (`id:`, `tag:`, `type:`), `branch`, `checkout`/`switch`, `merge` |
 | `C4Context` | `title`, `Person`, `Person_Ext`, `System`, `System_Ext`, `SystemDb`, `Rel` |
 

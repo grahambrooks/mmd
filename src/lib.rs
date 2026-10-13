@@ -13,17 +13,20 @@
 //! error carrying a line number, never a silent omission.
 
 pub mod c4;
-pub mod geom;
+pub mod flowchart;
 pub mod gitgraph;
-pub mod scene;
-pub mod svg;
+mod layered;
 pub mod text;
-pub mod theme;
 
 use std::fmt;
 
+pub use diagram_scene::{self as scene, Scene, Theme, geom};
 use text::Measure;
-use theme::Theme;
+
+/// Body text size, in px.
+pub(crate) const FONT_SIZE: f32 = 14.0;
+/// Space around a diagram and its gutters.
+pub(crate) const PADDING: f32 = 16.0;
 
 /// Which diagram a source describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +34,7 @@ use theme::Theme;
 pub enum Kind {
     GitGraph,
     C4Context,
+    Flowchart,
 }
 
 impl Kind {
@@ -39,6 +43,7 @@ impl Kind {
         match self {
             Kind::GitGraph => "gitGraph",
             Kind::C4Context => "C4Context",
+            Kind::Flowchart => "flowchart",
         }
     }
 }
@@ -78,7 +83,11 @@ pub fn detect(source: &str) -> Option<Kind> {
         if line.is_empty() {
             continue;
         }
-        for kind in [Kind::GitGraph, Kind::C4Context] {
+        // `graph` is the older name for a flowchart.
+        if line == "graph" || line.starts_with("graph ") {
+            return Some(Kind::Flowchart);
+        }
+        for kind in [Kind::GitGraph, Kind::C4Context, Kind::Flowchart] {
             let keyword = kind.keyword();
             if line == keyword
                 || line.starts_with(&format!("{keyword} "))
@@ -100,22 +109,35 @@ pub(crate) fn strip_comment(line: &str) -> &str {
     }
 }
 
-/// Render a diagram to SVG with the default theme and bundled fonts.
+/// Render a diagram to SVG with the default (light) theme and bundled
+/// fonts.
 #[cfg(feature = "bundled-fonts")]
 pub fn render(source: &str) -> Result<String, Error> {
     let fonts = text::BundledFonts::new()
         .ok_or_else(|| Error::new(0, "the bundled fonts could not be loaded"))?;
-    render_with(source, &Theme::default(), &fonts)
+    let theme = Theme {
+        font_family: text::BundledFonts::FAMILY.into(),
+        ..Theme::light()
+    };
+    render_with(source, &theme, &fonts)
 }
 
 /// Render a diagram to SVG with an explicit theme and text measurer.
 pub fn render_with(source: &str, theme: &Theme, measure: &dyn Measure) -> Result<String, Error> {
+    Ok(diagram_scene::svg::to_svg(&scene(source, measure)?, theme))
+}
+
+/// Lay a diagram out as a [`Scene`], for hosts that draw it themselves.
+/// Colours in it are theme roles; `measure` should measure the font the
+/// host will draw text in.
+pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
     match detect(source) {
-        Some(Kind::GitGraph) => gitgraph::render(source, theme, measure),
-        Some(Kind::C4Context) => c4::render(source, theme, measure),
+        Some(Kind::GitGraph) => gitgraph::scene(source, measure),
+        Some(Kind::C4Context) => c4::scene(source, measure),
+        Some(Kind::Flowchart) => flowchart::scene(source, measure),
         None => Err(Error::new(
             first_content_line(source),
-            "unrecognised diagram: expected one of `gitGraph`, `C4Context`",
+            "unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`",
         )),
     }
 }
@@ -150,8 +172,8 @@ mod tests {
 
     #[test]
     fn unsupported_diagrams_are_an_error_with_a_line() {
-        assert_eq!(detect("flowchart TD\n  A-->B\n"), None);
-        let error = render_with("\n\nflowchart TD\n", &Theme::default(), &Fixed).unwrap_err();
+        assert_eq!(detect("pie title Pets\n  \"Dogs\" : 3\n"), None);
+        let error = render_with("\n\npie\n", &Theme::default(), &Fixed).unwrap_err();
         assert_eq!(error.line, 3);
         assert!(error.to_string().contains("unrecognised diagram"));
     }
