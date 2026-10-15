@@ -27,7 +27,7 @@ clap = { version = "4.6", features = ["derive"], optional = true }
 # The PDF showcase only; the library itself never depends on a PDF stack.
 krilla = "0.8"
 krilla-svg = "0.8"
-usvg = "0.47" # the version krilla-svg 0.8 draws with
+usvg = "0.48" # the version krilla-svg 0.8 draws with
 typst-assets = { version = "0.15.1", features = ["fonts"] }
 ttf-parser = "0.25.1"
 
