@@ -41,6 +41,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             source: include_str!("gitgraph.mmd"),
         },
         Sample {
+            heading: "gitGraph TB",
+            prose: "The same diagram top to bottom: lanes run down the page in their \
+                    `order:`, commit labels sit left of each commit and tags to its right. \
+                    The fix is cherry-picked onto release, marked with mermaid's cherry; \
+                    the merge carries its own id and tag.",
+            source: include_str!("gitgraph-tb.mmd"),
+        },
+        Sample {
             heading: "flowchart",
             prose: "Nodes are ranked along the flow by a layered layout that keeps \
                     crossings down and subgraph members together; links are smooth \

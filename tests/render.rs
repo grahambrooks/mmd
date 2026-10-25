@@ -7,6 +7,7 @@ use mmd::Scene;
 use mmd::geom::Rect;
 
 const GITGRAPH: &str = include_str!("../examples/gitgraph.mmd");
+const GITGRAPH_TB: &str = include_str!("../examples/gitgraph-tb.mmd");
 const C4: &str = include_str!("../examples/c4.mmd");
 const FLOWCHART: &str = include_str!("../examples/flowchart.mmd");
 
@@ -36,7 +37,7 @@ fn drawn(scene: &Scene) -> Rect {
 
 #[test]
 fn both_samples_render_to_svg() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, GITGRAPH_TB, C4, FLOWCHART] {
         let svg = mmd::render(source).expect("sample renders");
         assert!(svg.starts_with("<svg"), "{}", &svg[..40.min(svg.len())]);
         assert!(svg.trim_end().ends_with("</svg>"));
@@ -45,7 +46,7 @@ fn both_samples_render_to_svg() {
 
 #[test]
 fn output_is_never_html_in_disguise() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, GITGRAPH_TB, C4, FLOWCHART] {
         let svg = mmd::render(source).unwrap();
         // The whole point of the crate: SVG-only consumers must keep the text.
         assert!(!svg.contains("foreignObject"), "labels must be SVG text");
@@ -70,6 +71,44 @@ fn every_commit_and_branch_reaches_the_scene() {
             "missing {expected}: {texts:?}"
         );
     }
+}
+
+#[test]
+fn every_vertical_commit_tag_and_branch_reaches_the_scene() {
+    let scene = mmd::gitgraph::scene(GITGRAPH_TB, &fonts()).unwrap();
+    let texts = scene.texts();
+    for expected in [
+        "init",
+        "parser",
+        "fix crash",
+        "notes",
+        "layout",
+        "ship",
+        "v1.0.1",
+        "v1.1",
+        "cherry-pick:fix crash",
+        "main",
+        "develop",
+        "release",
+    ] {
+        assert!(
+            texts.iter().any(|t| t == expected),
+            "missing {expected}: {texts:?}"
+        );
+    }
+    // Seven commits, each linked to its parents: the cherry-pick and the
+    // merge have two.
+    let commits = scene
+        .nodes
+        .iter()
+        .filter(|n| n.id.starts_with("commit:") && n.id.matches(':').count() == 1)
+        .count();
+    assert_eq!(commits, 7);
+    let links = scene.edges.iter().filter(|e| e.from.is_some()).count();
+    assert_eq!(links, 8);
+    // Lanes in `order:`: main, develop, release, left to right.
+    let x = |id: &str| scene.node(id).unwrap().rect.center().x;
+    assert!(x("branch:0") < x("branch:2") && x("branch:2") < x("branch:1"));
 }
 
 #[test]
@@ -114,6 +153,7 @@ fn c4_element_boxes_never_overlap_each_other() {
 fn everything_drawn_stays_inside_the_reported_bounds() {
     for scene in [
         mmd::gitgraph::scene(GITGRAPH, &fonts()).unwrap(),
+        mmd::gitgraph::scene(GITGRAPH_TB, &fonts()).unwrap(),
         mmd::c4::scene(C4, &fonts()).unwrap(),
         mmd::flowchart::scene(FLOWCHART, &fonts()).unwrap(),
     ] {
@@ -132,6 +172,10 @@ fn rendering_is_deterministic() {
         mmd::render(GITGRAPH).unwrap(),
         mmd::render(GITGRAPH).unwrap()
     );
+    assert_eq!(
+        mmd::render(GITGRAPH_TB).unwrap(),
+        mmd::render(GITGRAPH_TB).unwrap()
+    );
     assert_eq!(mmd::render(C4).unwrap(), mmd::render(C4).unwrap());
 }
 
@@ -139,6 +183,7 @@ fn rendering_is_deterministic() {
 fn unsupported_syntax_fails_loudly_with_a_line_number() {
     let error = mmd::render("gitGraph\n  commit\n  cherry-pick id: \"x\"\n").unwrap_err();
     assert_eq!(error.line, 3);
+    assert!(error.message.contains("unknown commit `x`"));
     assert!(error.to_string().starts_with("line 3:"));
 
     let error = mmd::render("C4Context\n  Container(a, \"A\")\n").unwrap_err();
