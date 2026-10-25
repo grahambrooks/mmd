@@ -1,0 +1,27 @@
+examples/gitgraph.mmd
+  s_0c7b5d39344b95::t_4af49d0db12ec0 3
+skills/render-mermaid/SKILL.md
+  s_0c7b5d39344b95::t_4ceafc420d9d12 100-102,117-118,123-124,129-131,151-152,175-176,179,182
+DESIGN.md
+  s_0c7b5d39344b95::t_4af49d0db12ec0 90-94,107,159-160,227-228,444-446,476-480,527-532,557-559,580,584,651-655,657-660,664-665,676-679,683-684,686-691
+CLAUDE.md
+  s_0c7b5d39344b95::t_4ceafc420d9d12 79-80,85
+README.md
+  s_0c7b5d39344b95::t_4ceafc420d9d12 73-74,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2d752e3ddfbe51e1f2def4e6a17b8e5274d3c2a",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
