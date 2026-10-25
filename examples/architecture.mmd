@@ -1,0 +1,23 @@
+%% showcase: architecture-beta of a web service
+%% prose: Services sit in nested groups and each edge leaves and enters the side it names, so `api:R --> L:db` puts the database to the right of the API. `{group}` attaches an edge to the group's boundary; a junction splits one line into several.
+%% approx: Placed on a grid where each edge's sides fix the relative cell (right, below, diagonal); mermaid runs a force-directed layout (fcose) with those sides as constraints, so spacing and compactness differ.
+%% approx: Built-in icons (cloud, database, disk, internet, server) are a blue square with a simple white mark; other icon names (e.g. `logos:aws-s3`) show as their name in the square. Group icons are not drawn.
+architecture-beta
+    title Document publishing service
+    group cloud(cloud)[Cloud]
+    group backend(server)[Backend] in cloud
+    service web(internet)[Browser]
+    service cdn(logos:aws-cloudfront)[CDN] in cloud
+    service api(server)[API] in backend
+    service worker(server)[Renderer] in backend
+    service db(database)[Postgres] in backend
+    service bucket(disk)[Assets] in cloud
+    junction split in backend
+
+    web:R --> L:cdn
+    cdn:R -[HTTPS]-> L:api
+    api:R --> L:db
+    api:B -- T:split
+    split:R --> L:worker
+    worker{group}:R --> L:bucket
+    db:B <-- T:worker

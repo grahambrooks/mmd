@@ -12,13 +12,18 @@
 //! See `DESIGN.md` for the supported syntax; anything outside it is a parse
 //! error carrying a line number, never a silent omission.
 
+pub mod architecture;
 pub mod c4;
 pub mod er;
+pub mod eventmodeling;
 pub mod flowchart;
 pub mod gitgraph;
+pub mod info;
 mod layered;
 mod style;
 pub mod text;
+pub mod venn;
+pub mod wardley;
 
 use std::fmt;
 
@@ -45,6 +50,12 @@ pub enum Kind {
     C4Dynamic,
     /// Recognised so its error comes from the C4 parser; not yet supported.
     C4Deployment,
+    /// `info`: draws mmd's version where mermaid draws its own.
+    Info,
+    Venn,
+    Wardley,
+    EventModeling,
+    Architecture,
 }
 
 impl Kind {
@@ -59,6 +70,11 @@ impl Kind {
         Kind::C4Dynamic,
         Kind::C4Deployment,
         Kind::Er,
+        Kind::Info,
+        Kind::Venn,
+        Kind::Wardley,
+        Kind::EventModeling,
+        Kind::Architecture,
     ];
 
     /// The keyword that introduces this diagram.
@@ -72,6 +88,11 @@ impl Kind {
             Kind::C4Component => "C4Component",
             Kind::C4Dynamic => "C4Dynamic",
             Kind::C4Deployment => "C4Deployment",
+            Kind::Info => "info",
+            Kind::Venn => "venn-beta",
+            Kind::Wardley => "wardley-beta",
+            Kind::EventModeling => "eventmodeling",
+            Kind::Architecture => "architecture-beta",
         }
     }
 
@@ -80,6 +101,7 @@ impl Kind {
         match self {
             // `graph` is the older name for a flowchart.
             Kind::Flowchart => &["graph"],
+            Kind::Architecture => &["architecture"],
             _ => &[],
         }
     }
@@ -175,6 +197,11 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         Some(Kind::Er) => er::scene(source, measure),
+        Some(Kind::Info) => info::scene(source, measure),
+        Some(Kind::Venn) => venn::scene(source, measure),
+        Some(Kind::Wardley) => wardley::scene(source, measure),
+        Some(Kind::EventModeling) => eventmodeling::scene(source, measure),
+        Some(Kind::Architecture) => architecture::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {
