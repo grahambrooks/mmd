@@ -1,0 +1,26 @@
+%% showcase: venn-beta with six sets, some regions not drawable
+%% prose: Six sets that all meet pairwise are more than circles can draw. mmd relaxes the circles again from other starting arrangements, pulling the sets of each missing region together, and keeps the best attempt. A named region that still does not come out is listed beneath the diagram as `A ∩ B: label` instead of being dropped.
+%% approx: Six or more sets are relaxed Euler circles; a named region they cannot form is listed under "Not drawn as a region" rather than drawn, and which ones land there depends on the attempt, not on venn.js's area-proportional optimisation.
+venn-beta
+    title Who covers which on-call rotation
+    set Web
+    set Mobile
+    set API
+    set Data
+    set Infra
+    set Security
+    union Web,Mobile["Ana"]
+    union Web,API["Ben"]
+    union Web,Data["Chen"]
+    union Web,Infra["Dev"]
+    union Web,Security["Eve"]
+    union Mobile,API["Femi"]
+    union Mobile,Data["Gus"]
+    union Mobile,Infra["Hana"]
+    union Mobile,Security["Ines"]
+    union API,Data["Jo"]
+    union API,Infra["Kai"]
+    union API,Security["Lea"]
+    union Data,Infra["Mo"]
+    union Data,Security["Nia"]
+    union Infra,Security["Oz"]
