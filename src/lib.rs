@@ -40,10 +40,7 @@ pub enum Kind {
     Er,
     C4Container,
     C4Component,
-    /// Recognised so its error comes from the C4 parser, which names it;
-    /// not yet supported.
     C4Dynamic,
-    /// Recognised so its error comes from the C4 parser; not yet supported.
     C4Deployment,
 }
 
@@ -78,8 +75,9 @@ impl Kind {
     /// Other keywords that introduce the same diagram.
     pub fn aliases(self) -> &'static [&'static str] {
         match self {
-            // `graph` is the older name for a flowchart.
-            Kind::Flowchart => &["graph"],
+            // `graph` is the older name for a flowchart. `flowchart-elk`
+            // asks for the ELK layout engine; it gets mmd's own layout.
+            Kind::Flowchart => &["graph", "flowchart-elk"],
             _ => &[],
         }
     }
@@ -87,7 +85,7 @@ impl Kind {
     /// Whether this kind renders, rather than being recognised only so its
     /// own parser can name what is missing.
     pub fn is_supported(self) -> bool {
-        !matches!(self, Kind::C4Dynamic | Kind::C4Deployment)
+        true
     }
 }
 
@@ -226,9 +224,12 @@ mod tests {
     #[test]
     fn every_c4_header_reaches_the_c4_parser() {
         for header in ["C4Dynamic", "C4Deployment"] {
-            let error = render_with(&format!("{header}\n"), &Theme::default(), &Fixed).unwrap_err();
-            assert!(error.message.contains(header), "{error:?}");
-            assert!(!error.message.contains("unrecognised"), "{error:?}");
+            let svg = render_with(
+                &format!("{header}\nSystem(a, \"A\")\n"),
+                &Theme::default(),
+                &Fixed,
+            );
+            assert!(svg.unwrap().contains(">A<"), "{header}");
         }
         let svg = render_with(
             "C4Container\nContainer(a, \"A\", \"Rust\")\n",

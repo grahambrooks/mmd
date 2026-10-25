@@ -231,13 +231,54 @@ fn unsupported_syntax_fails_loudly_with_a_line_number() {
     assert!(error.message.contains("unknown commit `x`"));
     assert!(error.to_string().starts_with("line 3:"));
 
-    let error = mmd::render("C4Context\n  Deployment_Node(a, \"A\") {\n}\n").unwrap_err();
-    assert_eq!(error.line, 2);
-    assert!(error.message.contains("Deployment_Node"));
+    let error =
+        mmd::render("C4Context\n  Deployment_Node(a, \"A\") {\n}\nRel(a, a, \"x\")\n").unwrap_err();
+    assert_eq!(error.line, 4);
+    assert!(error.message.contains("boundary"), "{error}");
 
     let error = mmd::render("C4Dynamic\n  Rel(a, b, \"x\")\n").unwrap_err();
-    assert_eq!(error.line, 1);
-    assert!(error.message.contains("C4Dynamic"), "{error}");
+    assert_eq!(error.line, 2);
+    assert!(error.message.contains("unknown element `a`"), "{error}");
+}
+
+#[test]
+fn c4_dynamic_numbers_relations_and_deployment_nodes_hold_their_containers() {
+    let source = include_str!("../examples/c4-dynamic.mmd");
+    let texts = mmd::c4::scene(source, &fonts()).unwrap().texts();
+    for expected in [
+        "1: Saves the draft",
+        "2: POST /documents",
+        "4: Queues a render",
+        "5: 202 Accepted",
+    ] {
+        assert!(texts.iter().any(|t| t == expected), "missing {expected}");
+    }
+
+    let source = include_str!("../examples/c4-deployment.mmd");
+    let scene = mmd::c4::scene(source, &fonts()).unwrap();
+    let texts = scene.texts();
+    for expected in [
+        "AWS",
+        "[Cloud]",
+        "eu-west-1",
+        "Scaled on queue depth",
+        "RDS",
+    ] {
+        assert!(texts.iter().any(|t| t == expected), "missing {expected}");
+    }
+    let node = |label: &str| {
+        scene
+            .containers
+            .iter()
+            .find(|c| c.label[0].plain() == label)
+            .unwrap()
+    };
+    let api = scene.node("api").unwrap().rect;
+    for holder in ["api pod", "Cluster", "AWS"] {
+        assert!(node(holder).rect.encloses(&api, 0.01), "{holder}");
+        assert_eq!(node(holder).kind, mmd::scene::ContainerKind::DeploymentNode);
+    }
+    assert!(!node("Reader's device").rect.intersects(&api));
 }
 
 #[test]
@@ -446,7 +487,7 @@ fn flowchart_v11_shapes_link_styles_and_styled_subgraphs_reach_the_scene() {
 #[test]
 fn flowchart_out_of_subset_fails_with_a_line_number() {
     for (source, line, names) in [
-        ("flowchart TD\n  A@{ shape: bolt }\n", 2, "bolt"),
+        ("flowchart TD\n  A@{ shape: wobbly }\n", 2, "wobbly"),
         (
             "flowchart TD\n  A --> B\n  linkStyle 5 stroke:#f00\n",
             3,
@@ -454,7 +495,7 @@ fn flowchart_out_of_subset_fails_with_a_line_number() {
         ),
         ("flowchart TD\n  A\n  click Z cb\n", 3, "`Z`"),
         (
-            "flowchart TD\n  subgraph s\n    A\n  end\n  B --> s\n",
+            "flowchart TD\n  subgraph s\n    A\n  end\n  B --> s[Box]\n",
             5,
             "subgraph",
         ),

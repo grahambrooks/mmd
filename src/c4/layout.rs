@@ -15,11 +15,15 @@ use std::collections::HashMap;
 use diagram_scene::route::Side;
 use diagram_scene::shape::{line_height, natural_size};
 use diagram_scene::{
-    Anchor, Container, ContainerKind, Edge, EdgeLabel, Font, Marker, Node, Paint, Point, Rect,
-    Role, Scene, Seg, Shape, Style, Text, TextLine, line_width, route,
+    Anchor, Container, ContainerKind, Dash, Edge, EdgeLabel, Font, Legend, LegendEntry, Marker,
+    Node, Paint, Point, Rect, Role, Scene, Seg, Shape, Style, Text, TextLine, Weight, line_width,
+    route,
 };
 
-use super::parse::{Arrows, C4, Direction, Form, Level, Relation};
+use super::parse::{
+    Arrows, BoundaryKind, C4, Colors, Direction, ElementKind, Form, Level, LineStyle, Relation,
+    View,
+};
 use crate::text::{Measure, wrap};
 use crate::{FONT_SIZE, PADDING};
 
@@ -44,29 +48,18 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
         .iter()
         .map(|element| {
             let kind = element.kind;
-            let shape = match (kind.level(), kind.form()) {
-                (Level::Person, _) => Shape::Person,
-                (_, Form::Db) => Shape::Cylinder,
-                (_, Form::Queue) => Shape::Queue,
-                (_, Form::Plain) => Shape::Rounded,
-            };
-            let role = if kind.is_external() {
-                Role::External
-            } else if kind.form() == Form::Db {
-                Role::Database
-            } else {
-                match kind.level() {
-                    Level::Person => Role::Person,
-                    Level::System => Role::System,
-                    Level::Container => Role::Container,
-                    Level::Component => Role::Component,
-                }
+            let shape = match kind_shape(kind) {
+                // `EightSidedShape()`: the scene has no octagon.
+                Shape::Rounded if element.style.octagon => Shape::Hexagon,
+                shape => shape,
             };
             let mut node = Node::new(element.alias.clone(), shape, Rect::default());
-            node.stereotype = vec![TextLine::new(
-                format!("\u{ab}{}\u{bb}", kind.stereotype()),
-                Font::Small,
-            )];
+            if !model.hide_stereotype {
+                node.stereotype = vec![TextLine::new(
+                    format!("\u{ab}{}\u{bb}", kind.stereotype()),
+                    Font::Small,
+                )];
+            }
             node.label = wrap(measure, &element.label, FONT_SIZE, true, inner_width)
                 .into_iter()
                 .map(|line| TextLine::new(line, Font::Bold))
@@ -84,7 +77,8 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
             if let Some(description) = &element.description {
                 node.sublabel.extend(small_lines(description));
             }
-            node.style.fill = Paint::Role(role);
+            node.style.fill = Paint::Role(kind_role(kind));
+            paint(&mut node.style, &element.style.colors);
             node
         })
         .collect();
@@ -94,10 +88,14 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
         .boundaries
         .iter()
         .map(|boundary| {
-            vec![
+            let mut lines = vec![
                 TextLine::new(boundary.label.clone(), Font::Bold),
                 TextLine::new(format!("[{}]", boundary.type_label), Font::Small),
-            ]
+            ];
+            if let Some(description) = &boundary.description {
+                lines.extend(TextLine::lines(description, Font::Small));
+            }
+            lines
         })
         .collect();
 
@@ -131,11 +129,27 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
     scene.containers = boundary_rects
         .iter()
         .zip(boundary_labels)
-        .map(|(&rect, label)| Container {
-            rect,
-            kind: ContainerKind::Boundary,
-            label,
-            style: Style::for_container(&ContainerKind::Boundary),
+        .zip(&model.boundaries)
+        .map(|((&rect, label), boundary)| {
+            let kind = if boundary.kind == BoundaryKind::Node {
+                ContainerKind::DeploymentNode
+            } else {
+                ContainerKind::Boundary
+            };
+            let mut style = Style::for_container(&kind);
+            // Mermaid draws a deployment node solid, a boundary dashed.
+            style.dash = if boundary.kind == BoundaryKind::Node {
+                Dash::Solid
+            } else {
+                Dash::Dashed
+            };
+            paint(&mut style, &boundary.style.colors);
+            Container {
+                rect,
+                kind,
+                label,
+                style,
+            }
         })
         .collect();
 
@@ -163,15 +177,33 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
         } else {
             route::curve_between(a, side_a, b, side_b)
         };
-        let mut lines = vec![TextLine::new(relation.label.clone(), Font::Small)];
+        // A dynamic view numbers its relations in order, as mermaid does.
+        let label = if model.view == View::Dynamic {
+            format!("{}: {}", index + 1, relation.label)
+        } else {
+            relation.label.clone()
+        };
+        let mut lines = vec![TextLine::new(label, Font::Small)];
         if let Some(technology) = &relation.technology {
             lines.push(TextLine::new(format!("[{technology}]"), Font::Small));
         }
         if let Some(description) = &relation.description {
             lines.push(TextLine::new(description.clone(), Font::Small));
         }
-        let pos = route::label_position(&path, 0.0).unwrap_or(a.lerp(b, 0.5));
+        let (dx, dy) = relation.style.offset;
+        let pos = route::label_position(&path, 0.0)
+            .unwrap_or(a.lerp(b, 0.5))
+            .offset(dx, dy);
         let mut edge = Edge::new(path).between(&from.id, &to.id);
+        if let Some((r, g, b)) = relation.style.line_color {
+            edge.pen.paint = Paint::Rgb(r, g, b);
+        }
+        match relation.style.line {
+            Some(LineStyle::Dashed) => edge.pen.dash = Dash::Dashed,
+            Some(LineStyle::Dotted) => edge.pen.dash = Dash::Dotted,
+            Some(LineStyle::Bold) => edge.pen.weight = Weight::Thick,
+            Some(LineStyle::Solid) | None => {}
+        }
         (edge.start, edge.end) = match relation.arrows {
             Arrows::Forward => (Marker::None, Marker::Arrow),
             Arrows::Back => (Marker::Arrow, Marker::None),
@@ -181,6 +213,7 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
             .push(EdgeLabel::new(pos, lines, true, measure, FONT_SIZE));
         scene.edges.push(edge);
     }
+    separate_labels(&mut scene.edges);
 
     let title_width = model
         .title
@@ -212,9 +245,16 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
             bottom = bottom.max(label.pos.y + height / 2.0 + 2.0);
         }
     }
-    let width =
+    let mut width =
         (PADDING * 2.0 + content_width.max(title_width).max(BOX_WIDTH)).max(right + PADDING);
-    let content_bottom = (top + content_height).max(bottom);
+    let mut content_bottom = (top + content_height).max(bottom);
+
+    if model.legend {
+        let legend = legend(model, measure, PADDING, content_bottom + PADDING);
+        width = width.max(legend.rect.right() + PADDING);
+        content_bottom = legend.rect.bottom();
+        scene.legend = Some(legend);
+    }
 
     if let Some(title) = &model.title {
         scene.title = Some(Text {
@@ -230,6 +270,130 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
     scene.width = width;
     scene.height = (content_bottom + PADDING).max(80.0);
     scene
+}
+
+fn kind_shape(kind: ElementKind) -> Shape {
+    match (kind.level(), kind.form()) {
+        (Level::Person, _) => Shape::Person,
+        (_, Form::Db) => Shape::Cylinder,
+        (_, Form::Queue) => Shape::Queue,
+        (_, Form::Plain) => Shape::Rounded,
+    }
+}
+
+fn kind_role(kind: ElementKind) -> Role {
+    if kind.is_external() {
+        Role::External
+    } else if kind.form() == Form::Db {
+        Role::Database
+    } else {
+        match kind.level() {
+            Level::Person => Role::Person,
+            Level::System => Role::System,
+            Level::Container => Role::Container,
+            Level::Component => Role::Component,
+        }
+    }
+}
+
+/// The source's own colours over a style.
+fn paint(style: &mut Style, colors: &Colors) {
+    if let Some((r, g, b)) = colors.fill {
+        style.fill = Paint::Rgb(r, g, b);
+    }
+    if let Some((r, g, b)) = colors.stroke {
+        style.stroke = Paint::Rgb(r, g, b);
+    }
+    if let Some((r, g, b)) = colors.text {
+        style.text = Paint::Rgb(r, g, b);
+    }
+    if colors.dashed {
+        style.dash = Dash::Dashed;
+    }
+}
+
+/// `SHOW_LEGEND()`: one entry per kind of element drawn, then one per
+/// element tag in use, with its top-left at `(x, y)`.
+fn legend(model: &C4, measure: &dyn Measure, x: f32, y: f32) -> Legend {
+    let mut entries: Vec<LegendEntry> = Vec::new();
+    for element in &model.elements {
+        let label = element.kind.stereotype();
+        if entries.iter().any(|e| e.label == label) {
+            continue;
+        }
+        let shape = kind_shape(element.kind);
+        let mut style = Style::for_shape(shape);
+        style.fill = Paint::Role(kind_role(element.kind));
+        entries.push(LegendEntry {
+            shape,
+            style,
+            label,
+        });
+    }
+    for tag in &model.tags {
+        let used = model.elements.iter().any(|e| e.tags.contains(&tag.name))
+            || model.boundaries.iter().any(|b| b.tags.contains(&tag.name));
+        if !used || tag.element.colors == Colors::default() {
+            continue;
+        }
+        let mut style = Style::for_shape(Shape::Rounded);
+        paint(&mut style, &tag.element.colors);
+        entries.push(LegendEntry {
+            shape: Shape::Rounded,
+            style,
+            label: tag.legend.clone().unwrap_or_else(|| tag.name.clone()),
+        });
+    }
+    // The painter's geometry: rows 1.6 em tall from 8 down, a swatch
+    // 1.2 rows wide from 10 in, the label 8 after it.
+    let row = FONT_SIZE * 1.6;
+    let small = Font::Small.size(FONT_SIZE);
+    let text = entries
+        .iter()
+        .map(|e| measure.width(&e.label, small, false))
+        .fold(0.0_f32, f32::max);
+    let width = 10.0 + row * 1.2 + 8.0 + text + 12.0;
+    let height = 8.0 + row * entries.len() as f32 + 6.0;
+    Legend {
+        rect: Rect::new(x, y, width, height),
+        entries,
+    }
+}
+
+/// The pill a label is drawn on.
+fn label_rect(label: &EdgeLabel) -> Rect {
+    let height: f32 = label
+        .lines
+        .iter()
+        .map(|line| line_height(line.font().size(FONT_SIZE)))
+        .sum();
+    Rect::centered(label.pos, label.text_width(FONT_SIZE) + 12.0, height + 4.0)
+}
+
+/// Move a label that would sit on an earlier one up or down, clear of it.
+/// Two relations between the same pair of elements otherwise put their
+/// labels on top of each other.
+fn separate_labels(edges: &mut [Edge]) {
+    const GAP: f32 = 2.0;
+    let mut placed: Vec<Rect> = Vec::new();
+    for edge in edges.iter_mut() {
+        for label in &mut edge.labels {
+            // A few rounds: moving off one label can land on another.
+            for _ in 0..4 {
+                let rect = label_rect(label);
+                let Some(other) = placed.iter().find(|r| r.intersects(&rect)) else {
+                    break;
+                };
+                let dy = if rect.center().y <= other.center().y {
+                    other.y - GAP - rect.bottom()
+                } else {
+                    other.bottom() + GAP - rect.y
+                };
+                label.pos = label.pos.offset(0.0, dy);
+            }
+            placed.push(label_rect(label));
+        }
+    }
 }
 
 /// How far a U-shaped route bulges out of the side it leaves.
@@ -253,7 +417,16 @@ fn relation_sides(relation: &Relation, nodes: &[Node]) -> (Side, Side) {
     }
     let overlaps_vertically = |a: Rect, b: Rect| a.y < b.bottom() && b.y < a.bottom();
     if !overlaps_vertically(from, to) {
-        return route::facing(from, to, false);
+        // Nearly level but far apart (elements in neighbouring nested
+        // boxes): join sideways, so the curve does not run along the
+        // gap between rows, through the boxes' headers.
+        let gap = |a0: f32, a1: f32, b0: f32, b1: f32| (b0 - a1).max(a0 - b1);
+        let across = gap(from.x, from.right(), to.x, to.right());
+        let down = gap(from.y, from.bottom(), to.y, to.bottom());
+        // Rows of one grid are a full `ROW_GAP` apart, so this only
+        // happens between grids.
+        let sideways = down < ROW_GAP / 2.0 && across > 2.0 * down.max(0.0) && across > 0.0;
+        return route::facing(from, to, sideways);
     }
     let (left, right) = if from.x <= to.x {
         (from, to)
