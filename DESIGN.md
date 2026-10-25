@@ -40,65 +40,140 @@ are read as comments); the hand-drawn ("rough") look; HTML labels; font
 fallback across scripts; interactive features (click handlers, tooltips);
 animation; and a CSS-based stylesheet of any kind.
 
-Amended 2026-10: flowchart `classDef`/`class`/`:::`/`style` *are* supported,
-because they carry meaning in real diagrams (a highlighted node). They map to
-per-node fill, stroke and text colours emitted as presentation attributes — not
-to a stylesheet — so decision 4 still holds.
+Amended 2026-10: `classDef`/`class`/`:::`/`style` (flowchart, ER) and
+`linkStyle` (flowchart) *are* supported, because they carry meaning in real
+diagrams, such as a highlighted node. They map to per-element colours emitted
+as presentation attributes, not to a stylesheet, so decision 4 still holds.
 
 ## Supported syntax
 
 This is the contract. **Anything outside it is a parse error with a line
 number, never a silent omission.** Grammar checked against the upstream
-sources in `mermaid/` — `packages/parser/src/language/gitGraph/gitGraph.langium`
-and `packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison` for those two;
-`packages/mermaid/src/diagrams/flowchart/parser/flow.jison` for flowcharts.
+sources in `mermaid/`:
+`packages/parser/src/language/gitGraph/gitGraph.langium`,
+`packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison`,
+`packages/mermaid/src/diagrams/flowchart/parser/flow.jison` and
+`packages/mermaid/src/diagrams/er/parser/erDiagram.jison`.
 
-Across every type: the first line that is not blank or a `%%` comment must be
-the diagram keyword. `%%{init: …}%%` directives are comments and are ignored.
-YAML front matter (`---` … `---`) is rejected as an unrecognised diagram.
+These rules apply to every type:
+
+- The first line that is not blank or a `%%` comment must be the diagram
+  keyword.
+- `%%{init: …}%%` directives are comments and are ignored.
+- YAML front matter (`---` … `---`) is an error that names it.
+
+### Accepted but not drawn
+
+A short list of statements is parsed, validated and kept on the model, but
+not drawn. Each one changes interaction or metadata, never what is on the
+page, so no element is lost:
+
+- `accTitle` and `accDescr` (single-line and `{ … }` blocks) in flowchart,
+  gitGraph and ER. `diagram-scene` has no `<title>`/`<desc>` field yet.
+- flowchart `click` (every form in the grammar; the ids it names must exist),
+  edge animation (`e1@{ animate: true }`) and `interpolate`/`curve:`.
+- gitGraph `msg:`, because mermaid's renderer never draws it either.
+- Properties a style may set that the scene has no slot for (`stroke-width` on
+  a node, `font-*`, `color` on a link label). A colour or length that cannot be
+  read is an error, whatever the property.
+
+### Styles
+
+`classDef`, `class`, `:::` and `style` take `fill`, `stroke`, `color` and
+`stroke-dasharray`. They become presentation attributes on that element, so
+decision 4 holds. Colours may be `#rgb`, `#rrggbb` (with optional alpha),
+`rgb()`/`rgba()` or any of the 148 CSS colour names. Anything else is an
+error, including `none`, `transparent` and `hsl()` (`src/style.rs`).
 
 ### gitGraph
 
 ```
-gitGraph
-    commit
-    commit id: "id"
-    commit tag: "v1.0"
-    commit type: NORMAL | REVERSE | HIGHLIGHT
-    branch <name>
-    checkout <name>
-    switch <name>
-    merge <name>
+gitGraph [LR|TB|BT][:]
+    title <text>
+    commit [id: "x"] [msg: "m" | "m"] [tag: "t"]… [type: NORMAL|REVERSE|HIGHLIGHT]
+    branch <name> [order: N]
+    checkout <name> | switch <name>
+    merge <name> [id: "x"] [tag: "t"]… [type: NORMAL|REVERSE|HIGHLIGHT]
+    cherry-pick id: "x" [tag: "t"]… [parent: "p"]
 ```
 
-`commit` accepts any combination of `id:`, `tag:` and `type:` on one line.
-Comments (`%%`) and blank lines are skipped. Quotes around names are optional.
+**Syntax**
 
-**Not supported:** `cherry-pick`, `branch ... order:`, `msg:`, the `LR`/`TB`/`BT`
-direction argument (left-to-right is always used), `title`, and
-accessibility statements.
+- Attributes may come in any order.
+- Strings take `"…"` or `'…'`. Quotes are optional on single words.
+- Several `tag:`s stack on one commit.
+- Ids must be unique. Mermaid only warns about a duplicate id and drops the
+  earlier commit; here it is an error.
+
+**Directions**
+
+- `LR` (the default) runs time left to right, one lane per branch.
+- `TB` gives each branch a vertical lane, with its label at the top and time
+  running down. Commit labels sit left of each commit and tags to its right.
+- `BT` mirrors `TB`.
+
+**Order and marks**
+
+- `order:` sorts lanes as mermaid does: `main` is 0, unordered branches come
+  next in declaration order, then explicit orders.
+- A merge is drawn as a ring unless it is given a `type:`.
+- A cherry-pick carries mermaid's cherry mark and a default
+  `cherry-pick:<id>` tag. It is validated: the commit must exist, must not
+  already be on the current branch, and must name a `parent:` when it is a
+  merge.
+
+**Not supported (error):** front matter and `%%{init}%%` gitGraph options
+(`parallelCommits`, `rotateCommitLabel`, `showBranches`, `mainBranchName`),
+since directives are comments.
 
 ### C4
 
 ```
-C4Context
+C4Context | C4Container | C4Component
     title <text>
-    Person(alias, "label", "description")
-    Person_Ext(alias, "label", "description")
-    System(alias, "label", "description")
-    System_Ext(alias, "label", "description")
-    SystemDb(alias, "label", "description")
-    Rel(from, to, "label")
-    Rel(from, to, "label", "technology")
+    UpdateLayoutConfig($c4ShapeInRow="n", $c4BoundaryInRow="m")
+    Person | Person_Ext(alias, "label", "descr")
+    System | System_Ext | SystemDb | SystemDb_Ext | SystemQueue | SystemQueue_Ext(alias, "label", "descr")
+    Container[Db|Queue][_Ext](alias, "label", "techn", "descr")
+    Component[Db|Queue][_Ext](alias, "label", "techn", "descr")
+    Boundary(alias, "label", "type") { … }
+    Enterprise_Boundary | System_Boundary | Container_Boundary(alias, "label") { … }
+    Rel | BiRel | Rel_Back(from, to, "label", "techn", "descr")
+    Rel_U | Rel_Up | Rel_D | Rel_Down | Rel_L | Rel_Left | Rel_R | Rel_Right(…)
 ```
 
-The description argument is optional on every element. Quotes are optional on
-arguments containing no comma.
+**Arguments**
 
-**Not supported:** `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`;
-any `*_Boundary`; `Container*`/`Component*`/`Node*` elements; `BiRel` and the
-directional `Rel_U`/`Rel_D`/`Rel_L`/`Rel_R`/`Rel_Back`; `UpdateElementStyle`
-and `UpdateLayoutConfig`.
+- `techn` and `descr` are optional.
+- They may also be passed as `$techn=` and `$descr=`.
+- Quotes are optional on arguments that contain no comma.
+
+**Boundaries**
+
+- Boundaries nest to any depth.
+- The `{` may sit on the next line.
+- Each boundary is a dashed box around a grid of its own, labelled with its
+  `[type]`.
+
+**Placement**
+
+- Each scope places its elements `$c4ShapeInRow` to a row (default 3), with
+  its child boundaries below them.
+- Placement follows declaration order.
+- The directional `Rel_*` forms choose which sides a curve leaves and arrives
+  on; they never move an element.
+
+**Relations**
+
+- `BiRel` has an arrowhead at both ends.
+- `Rel_Back(a, b)` puts the only arrowhead at `a`.
+- A relation's `descr` is drawn as a third label line. Mermaid parses it but
+  does not draw it.
+
+**Not supported (error):** `C4Dynamic`, `C4Deployment`, `Deployment_Node`,
+`Node*`, `RelIndex`, `UpdateElementStyle` and `UpdateRelStyle`. Also errors:
+sprite, tags and link arguments (positional or `$tags=`/`$link=`/`$sprite=`),
+relations to a boundary, and `accTitle`/`accDescr`/`direction`.
 
 ### flowchart
 
@@ -107,40 +182,149 @@ flowchart LR
     A[Start] --> B{Decide}
     B -->|yes| C([Done])
     B -- no --> D[[Retry]]
+    D@{ shape: doc, label: "Report for **ops**" }
     subgraph tools [Tools]
+        direction TB
         C & D --> E[(Store)]
     end
+    A ~~~ E
     classDef hot fill:#f96,stroke:#333
     class B hot
+    style tools fill:aliceblue
+    linkStyle 0 stroke:#b8860b,stroke-width:2px
 ```
 
-`graph` is accepted for `flowchart`. Directions `TB`/`TD`, `BT`, `LR`, `RL`.
-Shapes: `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`, `[(cylinder)]`,
-`((circle))`, `(((double circle)))`, `>flag]`, `{rhombus}`, `{{hexagon}}`,
-`[/parallelogram/]`, `[\alt\]`, `[/trapezoid\]`, `[\alt/]`; labels may be
-quoted and use `<br>`. Links: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`,
-`--o`, `--x`, `<-->`, `o--o`, `x--x`, with `|label|` or `-- label -->` text.
-Chains (`A --> B --> C`), `&` lists, `;` between statements, nested
-`subgraph id [title]` … `end`, `classDef`, `class`, `:::class` and `style`
-(fill, stroke, color, stroke-dasharray).
+**Header and directions**
 
-**Accepted but ignored** — a documented exception to the error rule, for
-statements that change interaction or fine styling but never drop an element:
-`click`, `linkStyle`, `accTitle`/`accDescr`, a subgraph's own `direction`, and
-`style` on a subgraph. Markdown in labels (`**bold**`, `` `code` ``) is shown
-as literal text.
+- `graph` is accepted for `flowchart`.
+- Directions are `TB`/`TD`, `BT`, `LR` and `RL`, and statements may follow
+  the header after `;`.
 
-**Not supported (error):** the v11 shape syntax `A@{ shape: … }`, edge ids
-(`A e1@--> B`), invisible links `~~~`, `flowchart-elk`, and front matter. A
-`style` or `class` naming an unknown id creates that node, as mermaid does.
+**Shapes**
 
-Layout is layered (`src/layered.rs`, written for this crate rather than
-porting dagre): cycles broken by reversing back edges, longest-path ranks two
-apart so every edge has an in-between rank for its label, dummy points for
-long edges, barycentre sweeps that keep subgraph members together and keep the
-ordering with fewest crossings, and isotonic regression across each rank. Links
-leave and arrive along the flow, spread across a node's side in the order their
-other ends lie.
+- Bracket shapes: `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`,
+  `[(cylinder)]`, `((circle))`, `(((double circle)))`, `(-ellipse-)`,
+  `>flag]`, `{rhombus}`, `{{hexagon}}`, `[/parallelogram/]`, `[\alt\]`,
+  `[/trapezoid\]` and `[\alt/]`.
+- v11 `A@{ shape: …, label: … }` accepts mermaid's names and aliases for those
+  outlines, plus `doc`, `cloud`, `note`, `h-cyl`, `text`, `sm-circ`/`start`,
+  `fr-circ`/`stop` and `fork`/`join`.
+- The other upstream shape names (`bolt`, `card`, `delay`, `triangle`, …) and
+  `icon`/`img` nodes are errors that name the shape.
+
+**Labels**
+
+- Labels may be quoted and may use `<br>`.
+- Markdown strings (`` "`…`" ``, and every `@{ label }`) draw `**bold**` and
+  `_italic_` as styled runs. Plain labels show `**` literally, as mermaid does.
+
+**Links**
+
+- Link types: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`, `--o`, `--x`, `<-->`,
+  `o--o` and `x--x`.
+- Link text goes in `|label|` or `-- label -->`.
+- Links may carry ids (`A e1@--> B`).
+- Invisible links (`~~~`) are placed but not drawn.
+- Chains (`A --> B --> C`), `&` lists and `;` between statements are
+  accepted.
+
+**Subgraphs**
+
+- Nested `subgraph id [title]` … `end`.
+- A subgraph `direction` that differs from its parent lays the subgraph out on
+  its own when no link crosses its edge. When a link does cross, the direction
+  is ignored, as mermaid documents.
+
+**Styling**
+
+- Styles apply to nodes and subgraphs.
+- `linkStyle N[,M…]|default [interpolate <curve>] <styles>` takes `stroke`,
+  `stroke-width` and `stroke-dasharray`.
+
+**Not supported (error):**
+
+- `flowchart-elk`.
+- A link to a subgraph id.
+- A node whose id is a subgraph's.
+- `[|field:value|]` vertex properties.
+- A `linkStyle` index out of range.
+- A top-level `direction` that differs from the header.
+
+A `style` or `class` that names an unknown id creates that node, as mermaid
+does.
+
+**Layout**
+
+Flowcharts use a layered layout (`src/layered.rs`), written for this crate
+rather than ported from dagre:
+
+- Cycles are broken by reversing back edges.
+- Longest-path ranks sit two apart, so every edge has an in-between rank for
+  its label.
+- Long edges get dummy points.
+- Barycentre sweeps keep subgraph members together and keep the ordering with
+  the fewest crossings.
+- Isotonic regression runs across each rank.
+
+Links leave and arrive along the flow, spread across a node's side in the
+order their other ends lie. A subgraph with its own direction is laid out
+separately and placed as one block.
+
+### erDiagram
+
+```
+erDiagram
+    direction LR
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ "LINE ITEM" : "contains many"
+    PRODUCT |o..o{ "LINE ITEM" : "ordered as"
+    CATEGORY |o--o{ CATEGORY : "parent of"
+    CAR 1 to zero or more NAMED-DRIVER : allows
+    p["Person"]
+    CUSTOMER:::hot {
+        int id PK
+        string email UK, FK "login"
+        list~int~ tags
+    }
+    classDef hot fill:#f96,stroke:#333
+```
+
+**Entities**
+
+- An entity may be bare, quoted (`"LINE ITEM"`) or aliased (`p[Person]`).
+- Attribute blocks hold `type name [PK|FK|UK[, …]] ["comment"]`. A block may
+  span lines or sit on one line.
+- Types may use `[]`, `()` and `~generic~`, which is shown as `<generic>`.
+- An entity with attributes is a table with type, name, keys and comment
+  columns.
+
+**Cardinality**
+
+| Meaning | Written as |
+|:---|:---|
+| zero or one | `\|o`/`o\|`, `one or zero`, `zero or one` |
+| exactly one | `\|\|`, `one`, `only one`, `1` |
+| zero or more | `}o`/`o{`, `zero or more`, `zero or many`, `many`, `many(0)`, `0+` |
+| one or more | `}\|`/`\|{`, `one or more`, `one or many`, `many(1)`, `1+` |
+| master-detail parent | `u` |
+
+**Lines and labels**
+
+- Identifying lines (`--`, `to`) are solid.
+- Non-identifying lines (`..`, `.-`, `-.`, `optionally to`) are dashed.
+- Every relationship needs `: label`. The label must be one word or quoted.
+- A self-relationship is drawn as a loop.
+- Other statements: `direction`, plus styles on entities.
+
+**Not supported (error):**
+
+- `title`, which upstream's grammar has no token for either.
+- A relationship without a label.
+- An alias and a relationship on the same line.
+- An unquoted multi-word alias.
+- Unknown cardinality symbols.
+
+Placement uses the same `layered` layout as flowcharts.
 
 ## Architecture
 
@@ -159,7 +343,8 @@ scene the same way.
 | Module | Role |
 |:---|:---|
 | `text` | `wrap`, and a bundled-font `Measure` over `rustybuzz`. |
-| `layered` | The layered graph layout flowcharts use. |
+| `layered` | The layered graph layout flowcharts and ER diagrams use. |
+| `style` | `classDef`/`style` declarations and CSS colours, shared by flowchart and ER. |
 
 Layout is testable without string-matching SVG, and a host (the emx editor)
 draws the scene natively instead of going through SVG at all.
@@ -171,7 +356,8 @@ draws the scene natively instead of going through SVG at all.
    for text.
 3. A `mod.rs` exposing `scene(source, measure)`.
 4. Add a `Kind` variant and register its keyword in `detect()` and `scene()`
-   in `lib.rs`.
+   in `lib.rs`. Use `style` for any `classDef`/`style` support rather than
+   parsing colours again.
 5. Add a sample to `examples/` and a case to the showcase.
 
 Nothing else in the crate should need to change.
@@ -192,14 +378,15 @@ The structural finding that shaped this project: **the advanced diagram types
 are the cheap ones.** In sebastian, C4 is 618 lines and gitGraph 1,364, and
 neither needs the graph-layout engine — they do their own layout and need only
 an SVG writer and a text measurer. Only flowchart, state, class, ER and block
-need `dagre` (~4,000 lines with `graphlib`). Flowcharts use a compact layered
-layout of this crate's own instead (`src/layered.rs`, about 600 lines with its
-tests) — which means **dagre is no longer the gate for state, class, ER or
-requirement diagrams either**: each is a node-and-edge graph that `layered`
-can place, so their cost is now parse + node drawing, not a layout engine.
-`diagram-scene` already carries what they draw, because puml uses it: `Start`,
-`End`, `ForkBar`, `Note` and `Table` shapes, inheritance/composition/
-aggregation markers and crow's-foot cardinalities.
+need `dagre` (~4,000 lines with `graphlib`). Flowcharts and ER diagrams use
+a compact layered layout of this crate's own instead (`src/layered.rs`, about
+600 lines with its tests). That means **dagre is not the gate for state,
+class or requirement diagrams either**: each is a node-and-edge graph that
+`layered` can place, so their cost is parse plus node drawing, not a layout
+engine. ER proved it. `diagram-scene` already carries the shapes and markers
+these types draw: `Start`, `End`, `ForkBar`, `Note` and `Table`, the
+inheritance, composition and aggregation markers, and crow's-foot
+cardinalities.
 
 No sebastian code is copied; the layouts here are written from the mermaid
 sources in `mermaid/` and from its rendered output. Sebastian is MIT, so
@@ -208,37 +395,64 @@ porting with attribution remains available if `dagre` is ever wanted.
 ## Roadmap
 
 Reviewed 2026-10-25 against the upstream checkout in `mermaid/` (92dc556,
-2026-05-01), which has 28 diagram types. Three are supported, C4 only in
-part. Order is by **value to prose documents** (what md2pdf and emx readers
-actually write) over **cost** (whether a layout already exists in this
-crate), not by upstream's list. Each step is one module per *Adding a diagram type*; none
-should touch another type.
+2026-05-01), which has 28 diagram types. Four are supported: flowchart,
+gitGraph, C4 (Context, Container and Component) and ER.
+
+Order is by **value to prose documents** (what md2pdf and emx readers actually
+write) over **cost** (whether a layout already exists in this crate), not by
+upstream's list. Each step is one module per *Adding a diagram type*, and no
+step should touch another type.
+
+### Done (2026-10-25)
+
+- **C4:** `C4Container` and `C4Component`; every `Container*`, `Component*`,
+  `*Db`, `*Queue` and `*_Ext` element; nested boundaries; `BiRel`, `Rel_Back`
+  and the directional `Rel_*` forms; `UpdateLayoutConfig`. Every `C4*` header
+  now reaches the C4 parser.
+- **gitGraph:** `TB`/`BT` (previously ignored without an error), `cherry-pick`,
+  `msg:`, `order:`, `title`, and ids, tags and types on `merge`.
+- **flowchart:**
+  - `linkStyle`, subgraph styles and subgraph `direction`, all previously
+    dropped without an error;
+  - the v11 `@{ shape: … }`;
+  - `~~~`;
+  - edge ids;
+  - markdown strings.
+- **erDiagram:** a new type on `layered` — the first new diagram type on the
+  roadmap.
+- **Styles:** every style that cannot be read is now an error.
 
 ### 1. Gaps in the supported types
 
-Cheapest wins — the module, the tests and the showcase case already exist.
+The module, the tests and the showcase case already exist for each of these.
 
 | Type | Missing | Notes |
 |:---|:---|:---|
-| C4 | `C4Container`, `C4Component`, `Container*`, `Component*`, `*_Ext`, `*Db`, `*Queue` | Same flat grid as `C4Context`; new element kinds only. `detect()` must route every `C4*` keyword to the C4 module so its "only `C4Context`" error is reachable — today `C4Container` gets the generic "unrecognised diagram". |
-| C4 | `*_Boundary` | Needs nested layout: boundaries are containers around a sub-grid. |
-| C4 | `BiRel`, `Rel_U/D/L/R`, `Rel_Back` | `BiRel` is a marker change; the directional forms are layout hints and could be accepted and ignored. |
-| gitGraph | `TB`/`BT` direction | Swap axes in layout; today `TB` silently draws left to right — contrary to the error rule. |
-| gitGraph | `msg:`, `branch … order:`, `cherry-pick` | `cherry-pick` is a commit with a dashed second parent. |
-| flowchart | `@{ shape: … }`, `~~~`, edge ids | v11 syntax, increasingly common in generated diagrams. |
+| C4 | `C4Dynamic` (`RelIndex`), `C4Deployment` (`Deployment_Node`, `Node*`) | Dynamic is numbered relations on the existing grid. Deployment is nested nodes, like boundaries. |
+| C4 | `UpdateElementStyle`, `UpdateRelStyle`; sprites, tags, links | Style updates can reuse `src/style.rs`. Sprites need icons, which is out of scope. |
+| C4 | Placement by relation | Placement is declaration order, so a related pair can land far apart. The directional `Rel_*` forms could feed a placement pass. |
+| all | `accTitle`/`accDescr` as SVG `<title>`/`<desc>` | Needs a field on `diagram_scene::Scene`; the models already hold the text. |
+| flowchart | The 72 upstream shapes with no outline here (`bolt`, `card`, `delay`, …) | Each one is a `diagram-scene` outline. Add them as real documents ask for them. |
+| flowchart | Subgraph `direction` when a link crosses the subgraph | Mermaid ignores the direction in this case too. Revisit only if mermaid changes. |
+| gitGraph | Rotated tags in `TB`/`BT`; merge labels | Tags sit flat beside the commit. A merge without an `id:` is labelled `merge <branch>`, where mermaid draws no label. |
 
 ### 2. Graph diagrams on `layered`
 
 `src/layered.rs` already does ranks, crossing reduction, subgraphs and edge
-labels, and `diagram-scene` already has the shapes and markers. These are
-parse + node drawing on top of both.
+labels, and `diagram-scene` already has the shapes and markers. ER showed what
+each remaining type costs: parse plus node drawing, about 1,600 lines with
+tests.
+
+ER copied two things from flowchart. The colour handling has since moved
+into `src/style.rs`. The port, curve and shift helpers are still copied;
+move them into a shared module before the next type copies them a third
+time.
 
 | Type | Keyword | Notes |
 |:---|:---|:---|
-| **state** | `stateDiagram-v2`, `stateDiagram` | Highest value of the graph types. `[*]` start/end, composite states as `layered` subgraphs, `<<choice>>`/`<<fork>>`/`<<join>>` (`Diamond`, `ForkBar`), notes. Concurrency `--` regions are the hard part — defer behind an error. |
-| **ER** | `erDiagram` | Entity boxes with attribute tables (`Table`); `CrowFoot` markers exist. Relationship labels are mid-edge, so no end-label work is needed — likely the cheapest graph type. |
-| **class** | `classDiagram` | Compartmented boxes (name / attributes / methods); relation markers exist in the scene; cardinality labels at both ends need `layered` to place labels near an edge's ends, not only its middle. |
-| requirement | `requirementDiagram` | Boxes of key/value lines and labelled relations; small once class boxes exist. |
+| **state** | `stateDiagram-v2`, `stateDiagram` | The next graph type, and the most valuable left. Covers `[*]` start/end, composite states as `layered` subgraphs, `<<choice>>`/`<<fork>>`/`<<join>>` (`Diamond`, `ForkBar`) and notes. Concurrency `--` regions are the hard part; defer them behind an error. |
+| **class** | `classDiagram` | Compartmented boxes (name / attributes / methods). The relation markers exist in the scene. Cardinality labels at both ends need `layered` to place labels near an edge's ends, not only its middle. |
+| requirement | `requirementDiagram` | Boxes of key/value lines and labelled relations. Small once class boxes exist. |
 
 ### 3. Own-layout diagrams
 

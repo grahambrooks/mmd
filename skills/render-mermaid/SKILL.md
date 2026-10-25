@@ -1,6 +1,6 @@
 ---
 name: render-mermaid
-description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the flowchart / gitGraph / C4 diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Only `flowchart`/`graph`, `gitGraph` and `C4Context` are supported; sequence, class, state, ER, gantt, pie and the rest are rejected.
+description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the flowchart / gitGraph / C4 / ER diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Supports `flowchart`/`graph`, `gitGraph`, `C4Context`/`C4Container`/`C4Component` and `erDiagram`; sequence, class, state, gantt, pie and the rest are rejected.
 argument-hint: <diagram.mmd> [-o out.svg]
 ---
 
@@ -22,6 +22,13 @@ GITHUB_TOKEN=$(gh auth token) bx grahambrooks/mmd -- diagram.mmd -o diagram.svg
 
 Everything after `--` is passed to `mmd` unchanged.
 
+## Which binary
+
+Releases up to `2026.10.2` support only `flowchart`, `gitGraph` (left to
+right, no `cherry-pick`) and `C4Context`. Everything below describes `main`
+and later releases. If `mmd --version` is older and the diagram needs newer
+syntax, say so rather than rewriting the diagram.
+
 ## Flags
 
 | Invocation | Effect |
@@ -35,102 +42,212 @@ There are no theme, size, or format options. Output is always SVG.
 
 ## What it can render
 
-Three diagram types. The first non-blank, non-`%%` line must be the keyword.
+The first line that is not blank or a `%%` comment must be the keyword.
+`%%{init: …}%%` lines are ignored. YAML front matter is an error.
 
-**`flowchart`** (or `graph`), direction `TB`/`TD`/`BT`/`LR`/`RL` (default `TB`)
+### `flowchart` (or `graph`)
+
+Directions are `TB`/`TD`, `BT`, `LR` and `RL`; the default is `TB`.
 
 ```
 flowchart LR
     A[Start] --> B{Decide}
     B -->|yes| C([Done])
     B -- no --> D[[Retry]]
+    R@{ shape: doc, label: "Report for **ops**" }
     subgraph tools [Tools]
+        direction TB
         C & D --> E[(Store)]
     end
+    E --> R
+    A ~~~ E
     classDef hot fill:#f96,stroke:#333,color:#222
     class B hot
+    style tools fill:aliceblue
+    linkStyle 0 stroke:darkgoldenrod,stroke-width:2px
 ```
 
-Shapes: `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`, `[(cylinder)]`,
-`((circle))`, `(((double circle)))`, `>flag]`, `{rhombus}`, `{{hexagon}}`,
-`[/parallelogram/]`, `[\alt\]`, `[/trapezoid\]`, `[\alt/]`. Labels may be
-quoted and use `<br>`. Links: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`,
-`--o`, `--x`, `<-->`, `o--o`, `x--x`, with `|label|` or `-- label -->`. Chains
-(`A --> B --> C`), `&` lists, `;` between statements, nested `subgraph id [title]`
-… `end`. Styling: `classDef`, `class`, `A:::cls`, `style A fill:…,stroke:…,color:…`.
+- **Shapes:** `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`,
+  `[(cylinder)]`, `((circle))`, `(((double circle)))`, `(-ellipse-)`,
+  `>flag]`, `{rhombus}`, `{{hexagon}}`, `[/parallelogram/]`, `[\alt\]`,
+  `[/trapezoid\]` and `[\alt/]`.
+- **v11 shapes:** `A@{ shape: … }` accepts the names for those outlines
+  (`rect`, `rounded`, `stadium`, `subproc`, `cyl`, `circle`, `diam`, `hex`,
+  `lean-r`/`lean-l`, `trap-b`/`trap-t`, `odd`). It also accepts `doc`,
+  `cloud`, `note`, `h-cyl`, `text`, `sm-circ`, `fr-circ` and `fork`. Any
+  other name (`bolt`, `card`, `delay`, `triangle`, `icon`, `img`, …) is an
+  error.
+- **Links:**
+  - Kinds: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`, `--o`, `--x`, `<-->`,
+    `o--o`, `x--x`, and the invisible `~~~`.
+  - Text goes in `|label|` or `-- label -->`.
+  - A link may carry an id (`A e1@--> B`).
+  - Chains, `&` and `;` work.
+- **Labels:** quoting and `<br>` work. Markdown needs the backtick string form
+  `` "`**bold** _it_`" `` or an `@{ label }`; a plain label shows `**`
+  literally.
+- **Styling:**
+  - `classDef`, `class`, `:::` and `style` work on nodes and subgraphs. They
+    take `fill`, `stroke`, `color` and `stroke-dasharray`.
+  - `linkStyle N|default` takes `stroke`, `stroke-width` and
+    `stroke-dasharray`.
+  - A subgraph may set its own `direction`.
 
-**`gitGraph`**
+### `gitGraph`
+
+Write `gitGraph`, `gitGraph TB:` or `gitGraph BT:`. The default runs left to
+right.
 
 ```
-gitGraph
-    commit id: "scaffold"
-    commit id: "base" tag: "v0.1"
-    branch feature
-    commit type: HIGHLIGHT
+gitGraph TB:
+    title Release flow
+    commit id: "init"
+    branch develop order: 1
+    commit id: "parser"
+    commit id: "fix crash" type: HIGHLIGHT
     checkout main
-    merge feature
-    commit type: REVERSE
+    branch release order: 2
+    cherry-pick id: "fix crash"
+    commit id: "notes" tag: "v1.0.1"
+    checkout main
+    merge develop id: "ship" tag: "v1.1"
 ```
 
-Statements: `commit` (any mix of `id:`, `tag:`, `type: NORMAL|REVERSE|HIGHLIGHT`),
-`branch <name>`, `checkout <name>`, `switch <name>`, `merge <name>` (a bare
-name — no `id:`/`tag:` on a merge). Quotes on names are optional. Branches must exist before `checkout`/`merge`; a branch
-cannot merge into itself.
+- **Commits:**
+  - `commit` takes any mix of `id:`, `msg:`, repeated `tag:`, and
+    `type: NORMAL|REVERSE|HIGHLIGHT`.
+  - `msg:` is stored but not drawn, which is also what mermaid does.
+  - Ids must be unique.
+- **Branches:**
+  - `branch <name> [order: N]` creates a branch.
+  - `checkout <name>` (or `switch <name>`) moves to one.
+  - A branch must exist before it is checked out or merged.
+- **Merges:** `merge <name>` takes `id:`, `tag:` and `type:`.
+- **Cherry-picks:**
+  - Write `cherry-pick id: "x"`, optionally with `tag:` and `parent: "p"`.
+  - `parent:` is required when the picked commit is a merge.
+  - The commit must not already be on the current branch.
 
-**`C4Context`**
+### C4
+
+Three levels: `C4Context`, `C4Container` and `C4Component`.
 
 ```
-C4Context
-    title System context
-    Person(user, "User", "Uses the app")
-    System(app, "App", "Does the work")
-    SystemDb(db, "Database")
-    System_Ext(mail, "Mail service")
-    Rel(user, app, "uses")
-    Rel(app, mail, "sends via", "SMTP")
+C4Container
+    title Publishing service
+    Person(author, "Author", "Writes Markdown")
+    System_Ext(git, "Git host")
+    System_Boundary(pub, "Publisher") {
+        Container(api, "API", "Rust, axum", "Accepts requests")
+        ContainerQueue(jobs, "Render jobs", "SQS")
+        ContainerDb(store, "Document store", "Postgres")
+    }
+    Rel(author, api, "Publishes", "HTTPS")
+    Rel(git, api, "Notifies")
+    Rel(api, jobs, "Enqueues")
+    BiRel(api, store, "Reads and writes", "SQL")
 ```
 
-Elements: `Person`, `Person_Ext`, `System`, `System_Ext`, `SystemDb` — the
-description argument is optional. `Rel(from, to, "label"[, "technology"])`;
-every alias used in a `Rel` must be declared somewhere in the diagram.
+- **Elements:**
+  - The kinds are `Person`, `System`, `Container` and `Component`.
+  - Each has `Db` and `Queue` variants and `_Ext` forms, such as
+    `SystemDb_Ext` and `ContainerQueue_Ext`.
+  - `Container` and `Component` take `(alias, label, techn, descr)`. The
+    others take `(alias, label, descr)`.
+  - Trailing arguments are optional; `$techn=` and `$descr=` also work.
+- **Boundaries:**
+  - `Boundary(a, "l", "type") { … }`, `Enterprise_Boundary`,
+    `System_Boundary` and `Container_Boundary`.
+  - They nest.
+- **Relations:**
+  - `Rel`, `BiRel`, `Rel_Back` and `Rel_U/D/L/R` take
+    `(from, to, label, techn, descr)`.
+  - The directional forms only choose which sides of the boxes the curve
+    uses.
+  - Every alias must be declared.
+  - A relation cannot target a boundary.
+- **Layout:**
+  - `UpdateLayoutConfig($c4ShapeInRow="3")` sets how many elements go in a
+    row.
+  - Elements are placed in declaration order, so declare related elements
+    next to each other.
+
+### `erDiagram`
+
+```
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ "LINE ITEM" : contains
+    PRODUCT |o..o{ "LINE ITEM" : "ordered as"
+    CUSTOMER {
+        int id PK
+        string email UK "login"
+    }
+```
+
+- **Cardinality:**
+  - Symbols: `|o`, `||`, `}o`, `}|` and their mirror images.
+  - Words also work: `one or more`, `zero or many`, `1+`, ….
+- **Lines:** `--` is identifying (solid); `..` is non-identifying (dashed).
+- **Labels:** every relationship needs `: label`. Quote any label with spaces.
+- **Attributes:** written `type name [PK|FK|UK[, …]] ["comment"]`.
+- **Also accepted:** aliases (`p["Person"]`), `direction TB|BT|LR|RL`, and
+  `classDef`/`class`/`:::`/`style`.
+
+### Colours
+
+Any colour in a style must be hex, `rgb()`/`rgba()` or a CSS colour name.
+`none`, `transparent`, `hsl()` and typos are errors, not silently ignored.
 
 ## What it cannot render — do not generate these
 
-- Any other diagram type: `sequenceDiagram`, `classDiagram`,
-  `stateDiagram`/`stateDiagram-v2`, `erDiagram`, `gantt`, `pie`, `mindmap`,
-  `timeline`, `journey`, `C4Container`, `C4Component`, `C4Dynamic`,
-  `C4Deployment`, and the rest. (Planned order: DESIGN.md → Roadmap.)
-- flowchart: the v11 `A@{ shape: … }` syntax, edge ids (`A e1@--> B`),
-  invisible links `~~~`, `flowchart-elk`. Use the bracket shapes instead.
-- gitGraph: `cherry-pick`, `commit msg:`, `branch ... order:`, `title`.
-- C4: any `*_Boundary`, `Container*`/`Component*`/`Node*`, `SystemDb_Ext`,
-  `SystemQueue`, `BiRel`, `Rel_U/D/L/R`, `Rel_Back`, `UpdateElementStyle`,
-  `UpdateLayoutConfig`.
-- YAML front matter (`---\ntitle: ...\n---`) is rejected.
-- Accepted but **ignored**: `%%{init: ...}%%` directives (treated as comments);
-  a gitGraph direction (`gitGraph TB:` still draws left to right); in
-  flowcharts `click`, `linkStyle`, `accTitle`/`accDescr`, a subgraph's own
-  `direction`, and `style` on a subgraph. Markdown in labels is shown
-  literally — don't use `**bold**` in labels.
+- **Other diagram types:** `sequenceDiagram`, `classDiagram`,
+  `stateDiagram`/`stateDiagram-v2`, `requirementDiagram`, `gantt`, `pie`,
+  `mindmap`, `timeline`, `journey`, `C4Dynamic`, `C4Deployment` and the
+  rest. The planned order is in DESIGN.md → Roadmap.
+- **flowchart:**
+  - `flowchart-elk`;
+  - a link to a subgraph id;
+  - any `@{ shape }` name outside the list above, plus `icon` and `img`;
+  - `[|field:value|]` vertex properties;
+  - `linkStyle` indexes beyond the links defined so far.
+- **C4:**
+  - `Deployment_Node`, `Node*`, `RelIndex`;
+  - `UpdateElementStyle`, `UpdateRelStyle`;
+  - sprite, tags or link arguments;
+  - `accTitle`, `direction`.
+- **ER:**
+  - `title`;
+  - a relationship without a label;
+  - an unquoted multi-word label or alias.
+- **Accepted but not drawn:**
+  - `accTitle`/`accDescr` (except in C4, where they are errors);
+  - flowchart `click` and edge animation;
+  - gitGraph `msg:`;
+  - a subgraph `direction` when a link crosses into the subgraph, which
+    mermaid ignores too.
 
-If the user needs an unsupported type, say so — do not silently rewrite the
-diagram into a different type.
+If the user needs an unsupported type, say so. Do not silently rewrite the
+diagram as a different type.
 
 ## Errors
 
-Unsupported input is a hard error, exit status 1, naming the line and construct:
+Unsupported input is a hard error: exit status 1, naming the line and the
+construct.
 
 ```
-mmd: x.mmd: line 1: unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`
-mmd: x.mmd: line 6: `cherry-pick` is not supported (see DESIGN.md)
+mmd: x.mmd: line 1: unrecognised diagram: expected one of `flowchart`, `erDiagram`, `gitGraph`, `C4Context`, `C4Container`, `C4Component`
+mmd: x.mmd: line 1: YAML front matter (`---`) is not supported; use `title` where the diagram takes one (see DESIGN.md)
+mmd: x.mmd: line 1: `C4Dynamic` is not supported; only `C4Context`, `C4Container` and `C4Component` (see DESIGN.md)
+mmd: x.mmd: line 2: shape `bolt` is not supported (see DESIGN.md)
+mmd: x.mmd: line 3: unrecognised colour `blurple` (see DESIGN.md)
 mmd: x.mmd: line 3: unknown branch `nope`
-mmd: x.mmd: line 2: expected a link near `~~~ C`
-mmd: x.mmd: line 1: unknown direction `XY`
+mmd: x.mmd: line 2: a relationship needs a label: `A ||--o{ B : label`
 ```
 
-No file is written on error — but a stale SVG from an earlier run stays in
-place, so check the exit status, not just that the file exists. Fix the
-named line and re-run.
+No file is written on error. A stale SVG from an earlier run stays in place,
+so check the exit status rather than whether the file exists. Fix the named
+line and re-run.
 
 ## Checking the output
 
@@ -142,29 +259,22 @@ grep -c '<text' diagram.svg     # > 0: labels are present
 ## Worked example
 
 ```bash
-cat > "$TMPDIR/release.mmd" <<'EOF'
-gitGraph
-    commit id: "init"
-    branch dev
-    commit id: "feature" type: HIGHLIGHT
-    checkout main
-    merge dev tag: "v1.0"
-EOF
-mmd "$TMPDIR/release.mmd"
-# mmd: .../release.mmd: line 6: `merge` takes one branch name, got `dev tag: "v1.0"`
+cat > "$TMPDIR/schema.mmd" <<'END'
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains many
+END
+mmd "$TMPDIR/schema.mmd"
+# exit 1 and no SVG: the multi-word label `contains many` must be quoted
 ```
 
-`merge` takes only a branch name (exit 1, no SVG). Tag a commit instead:
+Quote the label:
 
 ```bash
-cat > "$TMPDIR/release.mmd" <<'EOF'
-gitGraph
-    commit id: "init"
-    branch dev
-    commit id: "feature" type: HIGHLIGHT
-    checkout main
-    merge dev
-    commit id: "release" tag: "v1.0"
-EOF
-mmd "$TMPDIR/release.mmd" -o "$TMPDIR/release.svg" && test -s "$TMPDIR/release.svg"
+cat > "$TMPDIR/schema.mmd" <<'END'
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : "contains many"
+END
+mmd "$TMPDIR/schema.mmd" -o "$TMPDIR/schema.svg" && test -s "$TMPDIR/schema.svg"
 ```

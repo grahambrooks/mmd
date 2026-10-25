@@ -28,8 +28,9 @@ source ──parse──> model ──layout──> Scene ──diagram_scene::s
 ```
 
 Each diagram type owns its `parse` and `layout` and shares only a thin base:
-`text` (the `Measure` trait plus bundled fonts) and `layered` (the layered
-graph layout flowcharts use). The `Scene`, its shapes and markers, the theme
+`text` (the `Measure` trait plus bundled fonts), `layered` (the layered
+graph layout flowcharts and ER use) and `style` (`classDef`/`style`
+declarations and CSS colours). The `Scene`, its shapes and markers, the theme
 and the SVG writer live in the `diagram-scene` crate, shared with puml and
 forge.
 
@@ -55,13 +56,17 @@ Nothing else should need to change — if it does, the base is wrong.
 
 The order of new types is the **Roadmap** in DESIGN.md — update it when a type
 lands. Sebastian's measurements shaped it: C4, gitGraph, sequence, gantt and
-most chart types need no graph-layout engine. State, class, ER and requirement
-need one, but `layered` already exists, so they don't need `dagre`.
+most chart types need no graph-layout engine. State, class and requirement
+need one, but `layered` already exists. ER proved that, so they don't need
+`dagre` either.
 
 ## Unsupported is an error, not an omission
 
 Anything outside the subset in DESIGN.md must fail with a line number and name
-the construct — `` `cherry-pick` is not supported (see DESIGN.md) ``. A diagram
+the construct — `` shape `bolt` is not supported (see DESIGN.md) ``. That
+includes values: a colour that cannot be read is an error, not a fallback to
+the theme. The few statements that are accepted but not drawn are listed in
+DESIGN.md, and none of them may lose an element. A diagram
 that quietly loses an element is worse than one that refuses to render.
 
 ## Commands
@@ -79,15 +84,21 @@ cargo build --no-default-features # must keep working: no bundled fonts
 **Look at the PDF when you change a layout.** Tests prove nothing was dropped
 and that boxes do not overlap; they cannot tell you a label collided with a
 curve or that a tag was clipped at the top edge. `make showcase`, then render
-page 1 (`qlmanage -t -s 1400 -o . target/showcase.pdf`) and look.
+page 1 (`qlmanage -t -s 1400 -o . target/showcase.pdf`) and look. The PDF
+has one page per sample and `qlmanage` renders only the first, so move the
+sample you changed to the front while you look, then put it back.
+Don't judge text fit from `rsvg-convert` or a browser: they substitute fonts
+for the bundled ones, so tables and labels can look overfull when they are
+not.
 
 ## Reference material
 
 `mermaid/` is a checkout of the upstream mermaid.js repo, gitignored, kept for
 grammar reference. The authoritative sources for the current subset are
 `packages/parser/src/language/gitGraph/gitGraph.langium` and
-`packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison` and
-`packages/mermaid/src/diagrams/flowchart/parser/flow.jison`. Check the grammar
+`packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison`,
+`packages/mermaid/src/diagrams/flowchart/parser/flow.jison` and
+`packages/mermaid/src/diagrams/er/parser/erDiagram.jison`. Check the grammar
 there rather than inferring syntax from examples.
 
 ## Git and release

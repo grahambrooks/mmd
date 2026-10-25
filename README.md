@@ -5,7 +5,7 @@ publication. Pure Rust: no Node, no browser, no JavaScript runtime, no C
 toolchain.
 
 > **Status:** early development, released as CalVer builds. Flowcharts,
-> gitGraph and C4 context diagrams render; see [DESIGN.md](DESIGN.md) for the
+> gitGraph, C4 (context, container, component) and ER diagrams render; see [DESIGN.md](DESIGN.md) for the
 > exact supported syntax, what is deliberately out of scope, and the
 > [roadmap](DESIGN.md#roadmap) for the other diagram types.
 
@@ -55,22 +55,23 @@ mmd = { version = "*", default-features = false }
 
 | Diagram | Supported |
 |:---|:---|
-| `flowchart`/`graph` | `TB`/`TD`/`BT`/`LR`/`RL`; every node shape; `-->`, `---`, `-.->`, `==>`, `--o`, `--x`, `<-->` with `\|labels\|` or `-- text -->`; chains and `&`; nested `subgraph`; `classDef`, `class`, `:::`, `style` |
-| `gitGraph` | `commit` (`id:`, `tag:`, `type:`), `branch`, `checkout`/`switch`, `merge` |
-| `C4Context` | `title`, `Person`, `Person_Ext`, `System`, `System_Ext`, `SystemDb`, `Rel` |
+| `flowchart`/`graph` | `TB`/`TD`/`BT`/`LR`/`RL`; every bracket shape and the v11 `@{ shape: … }` names that map to them; `-->`, `---`, `-.->`, `==>`, `--o`, `--x`, `<-->`, `~~~` with `\|labels\|` or `-- text -->`; edge ids; chains and `&`; nested `subgraph` with its own `direction`; markdown strings; `classDef`, `class`, `:::`, `style`, `linkStyle` |
+| `gitGraph` | `LR`/`TB`/`BT`; `commit` (`id:`, `msg:`, `tag:`, `type:`), `branch` (`order:`), `checkout`/`switch`, `merge` (`id:`, `tag:`, `type:`), `cherry-pick`, `title` |
+| `C4Context`, `C4Container`, `C4Component` | `Person`, `System`, `Container`, `Component` with their `Db`/`Queue`/`_Ext` variants; nested `*Boundary`; `Rel`, `BiRel`, `Rel_Back`, `Rel_U/D/L/R`; `UpdateLayoutConfig`; `title` |
+| `erDiagram` | Entities with attribute tables (`PK`/`FK`/`UK`, comments); every cardinality, symbolic or in words; identifying and non-identifying lines; aliases; `direction`; `classDef`, `class`, `:::`, `style` |
 
-Next, in [roadmap](DESIGN.md#roadmap) order: the remaining C4 levels
-(`C4Container`, `C4Component`, boundaries) and gitGraph gaps; then `state`,
-`erDiagram` and `classDiagram` on the existing layered layout; then
-`sequenceDiagram`, `gantt`, `pie` and the other self-laid-out types. Every
-other diagram type is rejected today.
+Colours in styles are hex, `rgb()` or CSS names. Next, in
+[roadmap](DESIGN.md#roadmap) order: `stateDiagram`, `classDiagram` and
+`requirementDiagram` on the existing layered layout; then `sequenceDiagram`,
+`gantt`, `pie` and the other self-laid-out types. Every other diagram type is
+rejected today.
 
 Anything outside that subset is a **parse error naming the construct and its
 line** — never a silently missing element:
 
 ```console
 $ mmd notes.mmd
-mmd: notes.mmd: line 7: `cherry-pick` is not supported (see DESIGN.md)
+mmd: notes.mmd: line 7: shape `bolt` is not supported (see DESIGN.md)
 ```
 
 Adding a diagram type is a self-contained module: parse and layout to a
