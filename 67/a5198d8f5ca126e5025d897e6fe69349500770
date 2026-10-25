@@ -1,0 +1,27 @@
+examples/xychart-front-matter.mmd
+  s_0c7b5d39344b95::t_ed096ff9a67c47 1-14
+src/frontmatter.rs
+  s_0c7b5d39344b95::t_87c84f1b86f290 14
+  s_0c7b5d39344b95::t_25b7535b558344 1-13,15-22,27-48,53-81,86-187
+  s_0c7b5d39344b95::t_bca3f785044f45 49-52,82-85
+  s_0c7b5d39344b95::t_ed096ff9a67c47 23-26
+src/lib.rs
+  s_0c7b5d39344b95::t_f3d6717cd64915 211-213,389
+  s_0c7b5d39344b95::t_bca3f785044f45 21,257-270,382-388,390-396,398-399
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "67a5198d8f5ca126e5025d897e6fe69349500770",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
