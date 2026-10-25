@@ -1,0 +1,27 @@
+src/zenuml/parse.rs
+  s_0c7b5d39344b95::t_19eed5dab8d1b5 299,326-328,392,397
+CLAUDE.md
+  s_0c7b5d39344b95::t_19eed5dab8d1b5 55-56,85
+README.md
+  s_0c7b5d39344b95::t_19eed5dab8d1b5 7-8,61,80
+skills/render-mermaid/SKILL.md
+  s_0c7b5d39344b95::t_f0d47d44561944 3,52,88,95,100-103,115-122,127-129,133-134,149-151,173-174,177,180,185,187
+DESIGN.md
+  s_0c7b5d39344b95::t_5cbef00d4ac3df 98-99,399-400,430-431,463-467,473-474,482-485,517-523,533-548,631-633,645-656
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6861c586f80063b2a42fd81eeb4abefc56db9064",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
