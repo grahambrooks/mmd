@@ -13,5 +13,5 @@ use crate::text::Measure;
 /// Parse and lay out a source.
 pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
     let model = parse(source)?;
-    Ok(layout::layout(&model, measure))
+    layout::layout(&model, measure)
 }
