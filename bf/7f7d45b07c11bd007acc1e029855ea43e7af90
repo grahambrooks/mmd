@@ -1,0 +1,72 @@
+examples/requirement.mmd
+  s_0c7b5d39344b95::t_5a3deee41cee6c 1-45
+src/graph.rs
+  s_0c7b5d39344b95::t_31d57d27395389 213-218
+  s_0c7b5d39344b95::t_8c1003e33001a2 231-233,235
+  s_0c7b5d39344b95::t_901e33d0aa8dd4 1-143,145-212,219-230,236-740,747-808,811-823,831-834,836-878,880-1108
+  s_0c7b5d39344b95::t_811880807ea720 741-746
+  s_0c7b5d39344b95::t_2dbf34a7ee8a59 809-810
+  s_0c7b5d39344b95::t_089279c994c642 824-830,835
+  s_0c7b5d39344b95::t_c6a33cffef7c5e 144,234,879
+src/state/parse.rs
+  s_0c7b5d39344b95::t_c9550ec0c25f1d 1-454,456-530,538-663,665-750,752-767
+  s_0c7b5d39344b95::t_b15751e389b8c7 664
+  s_0c7b5d39344b95::t_91ee3df175e6f6 531-537
+  s_0c7b5d39344b95::t_0f1a963c7a0147 455,751
+examples/state.mmd
+  s_0c7b5d39344b95::t_919ca41045f808 1-35
+src/class/parse.rs
+  s_0c7b5d39344b95::t_f98ce8a489b844 1-326,328-553,555-623,625-803,805-830,832-942,944-959
+  s_0c7b5d39344b95::t_294e5227a22f21 624,804,831
+  s_0c7b5d39344b95::t_03288439962500 327,554,943
+src/requirement/mod.rs
+  s_0c7b5d39344b95::t_a4edb5ab9f5a3d 1-19
+src/requirement/parse.rs
+  s_0c7b5d39344b95::t_8e1be4dc9e0936 440-441,443-444,474-486,533,566-567
+  s_0c7b5d39344b95::t_71e0947c5825ae 1-439,442,445-473,487-532,534-565,568-582,584-587,589-592,594-597,599-611
+  s_0c7b5d39344b95::t_5806dbe73d77a8 583,588,593,598
+examples/class-namespaces.mmd
+  s_0c7b5d39344b95::t_1348b49466c847 1-31
+src/requirement/layout.rs
+  s_0c7b5d39344b95::t_d8882ac21b6411 1-147
+src/lib.rs
+  s_0c7b5d39344b95::t_9a0d81a43cf007 20
+  s_0c7b5d39344b95::t_3567b04dcdff9a 16,22-23,52-54,69-71,85-87,96-98,194-196
+src/class/layout.rs
+  s_0c7b5d39344b95::t_6ce06b124fe702 1-8,10,13-150,152-308
+  s_0c7b5d39344b95::t_52e7d2b8f574c7 151
+  s_0c7b5d39344b95::t_b405775abe8f49 9,11-12
+examples/state-concurrency.mmd
+  s_0c7b5d39344b95::t_8940b88452fe2e 3
+  s_0c7b5d39344b95::t_27103c3df05d23 1-2,4-21
+examples/gaps/state-inline-composite.mmd
+  s_0c7b5d39344b95::t_00db63a4ca4e2c 1-6
+src/state/layout.rs
+  s_0c7b5d39344b95::t_5ee0dac01359bb 344-359
+  s_0c7b5d39344b95::t_be88504b2ee5a8 1-8,10-39,45-79,81-343,360-367
+  s_0c7b5d39344b95::t_b15751e389b8c7 9
+  s_0c7b5d39344b95::t_e80649d9b82d84 40-44
+  s_0c7b5d39344b95::t_d1547ac1aeeeff 80
+src/state/mod.rs
+  s_0c7b5d39344b95::t_0e06c8d6eb07c8 1-17
+examples/class.mmd
+  s_0c7b5d39344b95::t_a7e375c83f9042 1-34
+src/class/mod.rs
+  s_0c7b5d39344b95::t_737969c6d53853 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf7f7d45b07c11bd007acc1e029855ea43e7af90",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
