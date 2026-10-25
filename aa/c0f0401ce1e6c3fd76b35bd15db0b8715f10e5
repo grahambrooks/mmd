@@ -1,0 +1,34 @@
+examples/venn-five-sets-every-pair.mmd
+  s_0c7b5d39344b95::t_d3102430442fe7 2-3
+src/venn/layout.rs
+  s_0c7b5d39344b95::t_6c5e73f171b717 361-376,381-403
+  s_0c7b5d39344b95::t_57271caae65287 377-380,782-784,1008-1010,1028
+  s_0c7b5d39344b95::t_bdb5e8744dd3e1 8-11,34-37,176
+  s_0c7b5d39344b95::t_360241b7fd7347 487-605
+  s_0c7b5d39344b95::t_9d0fa5ec36e45d 622-627,635-666,669,674
+  s_0c7b5d39344b95::t_97c7a63a3bc332 780-781,785-787,789,792-796,806-811,814-817,932-991,993-1006,1011-1027,1029-1036,1038-1039
+  s_0c7b5d39344b95::t_8c485f4556b328 260-302,304
+  s_0c7b5d39344b95::t_91eb8f6add495e 303,308
+  s_0c7b5d39344b95::t_630943d27050fb 322-325,332-337
+  s_0c7b5d39344b95::t_a9260d08409455 305
+examples/venn-six-sets-not-drawn.mmd
+  s_0c7b5d39344b95::t_58c05054d9ed69 1-26
+examples/venn-five-sets.mmd
+  s_0c7b5d39344b95::t_8ca2e65aeae930 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aac0f0401ce1e6c3fd76b35bd15db0b8715f10e5",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
