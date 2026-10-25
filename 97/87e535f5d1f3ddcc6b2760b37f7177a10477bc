@@ -1,0 +1,65 @@
+src/venn/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 355,399,456
+src/packet/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 125,137
+src/chart.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 177
+src/gitgraph/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 72,351
+src/treemap/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 36
+src/wardley/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 66,459
+src/journey/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 274
+Cargo.toml
+  s_0c7b5d39344b95::t_89b3de3587fe58 21
+src/ishikawa/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 192
+src/er/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 254
+src/block/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 386
+src/gantt/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 191,207,266,302,324
+src/architecture/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 217,295
+src/eventmodeling/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 280
+src/graph.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 796
+src/timeline/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 265
+src/sankey/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 255
+src/kanban/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 92,130,164,174
+src/info/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 43
+src/sequence/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 309,585,854,936,1120
+src/c4/layout.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 266
+src/treeview/layout.rs
+  s_0c7b5d39344b95::t_d97f21d5c0df4e 37,60
+src/frontmatter.rs
+  s_0c7b5d39344b95::t_16219f3ac2692b 107
+Cargo.lock
+  s_0c7b5d39344b95::t_9da76f203e324a 207-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9787e535f5d1f3ddcc6b2760b37f7177a10477bc",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
