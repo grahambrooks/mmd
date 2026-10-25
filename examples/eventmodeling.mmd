@@ -1,0 +1,27 @@
+%% showcase: eventmodeling of a shopping cart
+%% prose: Time runs left to right. Screens and automations sit in the top lane, commands and read models in the middle, events at the bottom; a namespaced entity gets a lane of its own. Arrows follow `->>` sources, or else the latest frame in another lane. Data shows under a frame's name.
+%% approx: Notes and given/when/then scenarios are drawn in a Notes band under the lanes; mermaid parses them but draws nothing.
+%% approx: Each namespace gets one lane per kind; mermaid opens a new lane for every namespaced frame.
+%% approx: Frame boxes are sized to their text, not mermaid's fixed minimum, and data is a table row rather than an HTML code block.
+eventmodeling
+    title Adding an item to a cart
+    tf 01 ui CartScreen
+    tf 02 cmd AddItem { productId, quantity }
+    tf 03 evt ItemAdded [[ItemAddedData]]
+    tf 04 rmo CartItems
+    tf 05 ui CartScreen
+    tf 06 cmd Checkout
+    tf 07 evt Payments.CheckoutStarted
+    tf 08 pcr PaymentProcessor ->> 09
+    rf 09 rmo PendingPayments
+
+    data ItemAddedData {
+        cartId: 42
+        productId: 7
+    }
+
+    note 06 {
+        Requires a signed-in customer
+    }
+
+    gwt 03 given evt ItemAdded when cmd AddItem then evt ItemAdded

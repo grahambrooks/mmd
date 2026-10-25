@@ -1,0 +1,37 @@
+%% showcase: wardley-beta of a software platform
+%% prose: Components sit at their [visibility, evolution] coordinates: user-facing at the top, commodity at the right. Lines are dependencies, dashed arrows show where a component is evolving to, rings mark build/buy/outsource choices, the bar marks inertia, and a pipeline box groups variants of one component.
+%% approx: Link labels and the "Visibility" axis title are drawn level, not rotated along the line or the axis.
+%% approx: Accelerators and deaccelerators are heavy arrows, not mermaid's outlined block arrows.
+%% approx: Evolve targets get a dashed ghost circle; mermaid draws only the arrow.
+wardley-beta
+title Software Platform Strategy
+evolution Genesis@0.25 -> Custom@0.5 -> Product@0.75 -> Commodity@1.0
+anchor Customer [0.96, 0.55]
+component Mobile App [0.80, 0.25] (build)
+component Web App [0.80, 0.55] (build)
+component API Gateway [0.62, 0.62] (buy)
+component Auth Service [0.45, 0.85] (outsource)
+component Database [0.42, 0.42] (inertia)
+component Storage [0.22, 0.55]
+component Cloud Platform [0.06, 0.92] (market)
+Customer -> Mobile App
+Customer -> Web App
+Mobile App -> API Gateway
+Web App -> API Gateway
+API Gateway +'tokens'> Auth Service
+API Gateway -> Database
+Database -> Storage
+Storage -> Cloud Platform
+evolve API Gateway 0.85
+evolve Database 0.68
+pipeline Storage {
+    component File Store [0.32]
+    component Object Store [0.62]
+    component Managed Blobs [0.82]
+}
+accelerator Cloud Native [0.32, 0.66]
+deaccelerator Legacy Data [0.42, 0.12]
+note "Build the mobile-first experience" [0.93, 0.04]
+annotations [0.12, 0.03]
+annotation 1,[0.88, 0.25] "User touchpoints"
+annotation 2,[0.71, 0.66] "Integration layer"

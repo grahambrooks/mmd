@@ -12,16 +12,19 @@
 //! See `DESIGN.md` for the supported syntax; anything outside it is a parse
 //! error carrying a line number, never a silent omission.
 
+pub mod architecture;
 pub mod block;
 pub mod c4;
 mod chart;
 pub mod class;
 pub mod er;
+pub mod eventmodeling;
 pub mod flowchart;
 mod frontmatter;
 pub mod gantt;
 pub mod gitgraph;
 mod graph;
+pub mod info;
 pub mod ishikawa;
 pub mod journey;
 pub mod kanban;
@@ -41,6 +44,8 @@ pub mod text;
 pub mod timeline;
 pub mod treemap;
 pub mod treeview;
+pub mod venn;
+pub mod wardley;
 pub mod xychart;
 
 use std::fmt;
@@ -84,6 +89,11 @@ pub enum Kind {
     Block,
     TreeView,
     Ishikawa,
+    Info,
+    Venn,
+    Wardley,
+    EventModeling,
+    Architecture,
 }
 
 impl Kind {
@@ -117,6 +127,11 @@ impl Kind {
         Kind::Block,
         Kind::TreeView,
         Kind::Ishikawa,
+        Kind::Info,
+        Kind::Venn,
+        Kind::Wardley,
+        Kind::EventModeling,
+        Kind::Architecture,
     ];
 
     /// The keyword that introduces this diagram.
@@ -149,6 +164,11 @@ impl Kind {
             Kind::Block => "block",
             Kind::TreeView => "treeView-beta",
             Kind::Ishikawa => "ishikawa",
+            Kind::Info => "info",
+            Kind::Venn => "venn-beta",
+            Kind::Wardley => "wardley-beta",
+            Kind::EventModeling => "eventmodeling",
+            Kind::Architecture => "architecture-beta",
         }
     }
 
@@ -167,6 +187,7 @@ impl Kind {
             Kind::Packet => &["packet-beta"],
             Kind::Block => &["block-beta"],
             Kind::Ishikawa => &["ishikawa-beta"],
+            Kind::Architecture => &["architecture"],
             _ => &[],
         }
     }
@@ -298,6 +319,11 @@ fn diagram(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Block) => block::scene(source, measure),
         Some(Kind::TreeView) => treeview::scene(source, measure),
         Some(Kind::Ishikawa) => ishikawa::scene(source, measure),
+        Some(Kind::Info) => info::scene(source, measure),
+        Some(Kind::Venn) => venn::scene(source, measure),
+        Some(Kind::Wardley) => wardley::scene(source, measure),
+        Some(Kind::EventModeling) => eventmodeling::scene(source, measure),
+        Some(Kind::Architecture) => architecture::scene(source, measure),
         None => {
             let line = first_content_line(source);
             let expected: Vec<String> = Kind::ALL
