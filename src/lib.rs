@@ -13,14 +13,18 @@
 //! error carrying a line number, never a silent omission.
 
 pub mod c4;
+pub mod class;
 pub mod er;
 pub mod flowchart;
 pub mod gantt;
 pub mod gitgraph;
+mod graph;
 pub mod journey;
 pub mod kanban;
 mod layered;
+pub mod requirement;
 pub mod sequence;
+pub mod state;
 mod style;
 pub mod text;
 pub mod timeline;
@@ -52,6 +56,9 @@ pub enum Kind {
     Journey,
     Kanban,
     Sequence,
+    State,
+    Class,
+    Requirement,
 }
 
 impl Kind {
@@ -71,6 +78,9 @@ impl Kind {
         Kind::Journey,
         Kind::Kanban,
         Kind::Sequence,
+        Kind::State,
+        Kind::Class,
+        Kind::Requirement,
     ];
 
     /// The keyword that introduces this diagram.
@@ -89,6 +99,9 @@ impl Kind {
             Kind::Journey => "journey",
             Kind::Kanban => "kanban",
             Kind::Sequence => "sequenceDiagram",
+            Kind::State => "stateDiagram-v2",
+            Kind::Class => "classDiagram",
+            Kind::Requirement => "requirementDiagram",
         }
     }
 
@@ -98,6 +111,9 @@ impl Kind {
             // `graph` is the older name for a flowchart. `flowchart-elk`
             // asks for the ELK layout engine; it gets mmd's own layout.
             Kind::Flowchart => &["graph", "flowchart-elk"],
+            Kind::State => &["stateDiagram"],
+            Kind::Class => &["classDiagram-v2"],
+            Kind::Requirement => &["requirement"],
             _ => &[],
         }
     }
@@ -198,6 +214,9 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Journey) => journey::scene(source, measure),
         Some(Kind::Kanban) => kanban::scene(source, measure),
         Some(Kind::Sequence) => sequence::scene(source, measure),
+        Some(Kind::State) => state::scene(source, measure),
+        Some(Kind::Class) => class::scene(source, measure),
+        Some(Kind::Requirement) => requirement::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {

@@ -1,0 +1,34 @@
+%% showcase: classDiagram
+%% prose: Classes are boxes of annotations and name over attributes over methods. Every UML relation has its own marker — hollow triangle for inheritance and realisation, diamonds for composition and aggregation, arrows for association and dependency — and the dotted forms are dashed. Cardinalities sit beside each end, labels mid-way.
+%% approx: Static members keep their trailing `$` instead of being underlined; abstract members are italic, as in mermaid.
+%% approx: Cardinalities sit beside the line near each end rather than exactly where mermaid puts them.
+%% approx: Layout is mmd's layered algorithm, not dagre.
+classDiagram
+    class Shape {
+        <<interface>>
+        +area() double
+        +draw(canvas: Canvas)*
+    }
+    class Circle {
+        -double radius
+        +area() double
+    }
+    class Polygon~T~ {
+        -List~Point~T~~ points
+        +int count$
+        +area() double
+    }
+    class Canvas {
+        +int width
+        +int height
+        +clear()
+    }
+    class Layer
+    Shape <|.. Circle : implements
+    Shape <|.. Polygon
+    Canvas "1" *-- "many" Layer : holds
+    Layer "1" o-- "0..*" Shape
+    Canvas ..> Renderer : uses
+    Renderer --> Theme
+    Renderer -- Font
+    note for Polygon "points are kept in drawing order"

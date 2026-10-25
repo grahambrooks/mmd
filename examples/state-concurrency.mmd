@@ -1,0 +1,21 @@
+%% showcase: stateDiagram with concurrent regions
+%% prose: A keyboard's lock keys toggle independently, so the composite Active holds two regions separated by `--`, each with its own start. The composite's own `direction LR` lays each region out left to right.
+%% approx: Regions are dashed boxes stacked across the composite's flow, not panes divided by a single dashed rule.
+%% approx: A self-transition loops out of the state's side; mermaid draws a tighter loop.
+stateDiagram-v2
+    [*] --> Active
+    state Active {
+        direction LR
+        [*] --> NumLockOff
+        NumLockOff --> NumLockOn : EvNumLockPressed
+        NumLockOn --> NumLockOff : EvNumLockPressed
+        --
+        [*] --> CapsLockOff
+        CapsLockOff --> CapsLockOn : EvCapsLockPressed
+        CapsLockOn --> CapsLockOff : EvCapsLockPressed
+    }
+    Active --> Active : EvKeyRepeat
+    Active --> Sleeping : idle 5 min
+    state "Asleep, display off" as Sleeping
+    Sleeping --> Active : any key
+    Sleeping --> [*] : power off
