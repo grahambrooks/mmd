@@ -1,0 +1,40 @@
+src/sequence/mod.rs
+  s_0c7b5d39344b95::t_5a1fd7e12e2cc8 7-8,21-24
+  s_0c7b5d39344b95::t_e9fe90bae81a1d 25
+src/lib.rs
+  s_0c7b5d39344b95::t_cb8875fddbfaa0 50,98,137,175,331,435-437
+src/sequence/parse.rs
+  s_0c7b5d39344b95::t_5a1fd7e12e2cc8 125-127,142
+examples/gaps/zenuml-ref.mmd
+  s_0c7b5d39344b95::t_f8294a05c9f7af 1-6
+examples/zenuml-control-flow.mmd
+  s_0c7b5d39344b95::t_7d2272231065e2 1-34
+src/zenuml/mod.rs
+  s_0c7b5d39344b95::t_063ef3349fa116 1-18
+examples/zenuml.mmd
+  s_0c7b5d39344b95::t_fc291643f38aef 1-21,24
+src/zenuml/parse.rs
+  s_0c7b5d39344b95::t_9af822b0b62048 138-141,547-549,578-581,629-636,664-669,859-862,953-960,969-970,979-982,991-994,1050-1052,1064-1070,1092-1095,1119-1138,1156-1161,1164-1169,1181-1186,1229-1235
+  s_0c7b5d39344b95::t_074b75e9325158 1-100,102-111,113-137,142-546,550-577,582-628,637-663,670-701,717-858,863-952,961-968,971-978,983-990,995-1049,1053-1063,1071-1091,1096-1118,1139-1140,1142-1155,1162-1163,1170-1180,1187-1228,1236-1238
+  s_0c7b5d39344b95::t_4037d0947e441a 702-716
+  s_0c7b5d39344b95::t_c1e2eefee50fd3 1141
+  s_0c7b5d39344b95::t_422b52c13dff5d 101,112
+examples/gaps/zenuml-divider.mmd
+  s_0c7b5d39344b95::t_d0f6a50ae7e1c3 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "307af13c9915f00ebd81d48092f978c62606414e",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
