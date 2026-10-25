@@ -70,14 +70,15 @@ names.
 
 `make showcase` builds `target/showcase.pdf`. It opens with a coverage
 matrix, then shows every sample with its recorded approximations, and every
-known gap as the error mmd reports.
+known gap (there are none today) as the error mmd reports. Every SVG carries
+its `accTitle`/`accDescr`, or its title, as `<title>`/`<desc>`.
 
 Anything outside that subset is a **parse error naming the construct and its
 line** — never a silently missing element:
 
 ```console
 $ mmd notes.mmd
-mmd: flow.mmd: line 5: dividers (`==…==`) are not supported in zenuml (see DESIGN.md)
+mmd: checkout.mmd: line 2: `section` is not supported in zenuml (see DESIGN.md)
 ```
 
 Adding a diagram type is a self-contained module: parse and layout to a

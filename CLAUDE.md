@@ -76,13 +76,13 @@ files.
   difference is written down as an `%% approx:` line in its sample. Never
   drop input silently.
 
-What remains is the **Roadmap** in DESIGN.md: known gaps, approximations
-worth narrowing, and work blocked on `diagram-scene`.
+What remains is the **Roadmap** in DESIGN.md: known gaps (none today),
+approximations worth narrowing, and work blocked on `diagram-scene`.
 
 ## Unsupported is an error, not an omission
 
 Anything outside the subset in DESIGN.md must fail with a line number and name
-the construct — `` `ref` is not supported in zenuml (see DESIGN.md) ``. That
+the construct — `` `section` is not supported in zenuml (see DESIGN.md) ``. That
 includes values: a colour that cannot be read is an error, not a fallback to
 the theme. The few statements that are accepted but not drawn are listed in
 DESIGN.md, and none of them may lose an element. A diagram that quietly

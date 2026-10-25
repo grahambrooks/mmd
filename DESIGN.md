@@ -87,9 +87,11 @@ A short list of statements is parsed, validated and kept on the model, but
 not drawn. Each one changes interaction or metadata, never what is on the
 page, so no element is lost:
 
-- `accTitle` and `accDescr` (single-line and `{ … }` blocks) in every type
-  that has them, except C4, where `accTitle` is the drawn title as in
-  mermaid's grammar. `diagram-scene` has no `<title>`/`<desc>` field yet.
+- `accTitle` and `accDescr` (single-line and `{ … }` blocks), in every type.
+  They are not drawn, but they become the SVG's `<title>` and `<desc>` (with
+  `role="img"`), read once for all types in `src/accessibility.rs`. Without
+  an `accTitle`, the front matter's title, then the drawn title, names the
+  diagram. In C4, `accTitle` is also the drawn title, as in mermaid's grammar.
 - Interactions: flowchart, class and gantt `click`/`link`/`callback`/`call`
   (the ids they name must exist); sequence `link`/`links`/`properties`/
   `details` menus; C4 `$link`.
@@ -102,7 +104,7 @@ page, so no element is lost:
   `todayMarker`, because a static render has no "today"; mindmap `:::class`,
   which is page CSS.
 - Properties a style may set that the scene has no slot for (`stroke-width` on
-  a node, `font-*`, `color` on a link label). A colour or length that cannot be
+  a node, `font-*`). A link's `color` does colour its label. A colour or length that cannot be
   read is an error, whatever the property.
 
 ### Styles
@@ -154,7 +156,8 @@ gitGraph [LR|TB|BT][:]
 **Ignored:** `%%{init}%%` gitGraph options (`parallelCommits`,
 `rotateCommitLabel`, `showBranches`, `mainBranchName`), since directives are
 comments. Tags stay flat in `TB`/`BT`, where mermaid rotates them, because
-`diagram-scene` has no rotated text.
+tags are nodes and `diagram-scene` rotates text, not nodes. Commit labels are
+level, where mermaid's default (`rotateCommitLabel: true`) turns them −45°.
 
 ### C4
 
@@ -221,8 +224,8 @@ C4Context | C4Container | C4Component | C4Dynamic | C4Deployment
 - Some of these (`AddElementTag`, `UpdateBoundaryStyle`, `SHOW_LEGEND`,
   `HIDE_STEREOTYPE`) come from C4-PlantUML; mermaid's grammar rejects them,
   mmd accepts them.
-- A relation's `textColor` is parsed but not drawn: edge labels use the
-  theme's colour.
+- A relation's `textColor`, from `UpdateRelStyle` or a tag, colours its
+  label.
 
 **Not supported (error):** relations to a boundary, `direction`, unknown
 `$keys`, too many positional arguments, an unknown style or tag value, and a
@@ -402,7 +405,6 @@ self-loops, block groups and pinned notes):
   - notes, including multi-line and floating notes;
   - `direction` per composite;
   - `classDef`/`class`/`:::`/`style`.
-  - Error: a composite's body on the same line as its `{` (gap sample).
 - **`classDiagram`** (alias `classDiagram-v2`):
   - classes, with generics, labels, annotations, and bodies or `X : member`
     lines;
@@ -439,8 +441,9 @@ self-loops, block groups and pinned notes):
 
 **Charts** (`src/chart.rs` holds shared ticks, legends, arcs and fills):
 
-- `diagram-scene` edges are stroke-only, so filled areas are drawn as rows of
-  strokes: dense ones read as solid, sparse ones as a translucent fill.
+- Wedges, bars, radar areas and sankey ribbons are `diagram-scene` areas:
+  solid, or half-transparent where mermaid draws them so. Axis titles and
+  labels that mermaid turns are rotated −90°.
 - **`pie`**: `pie [showData] [title …]` and `"label" : value`.
 - **`xychart`** (alias `xychart-beta`):
   - `horizontal`;
@@ -470,8 +473,11 @@ self-loops, block groups and pinned notes):
   - Sections.
   - Tasks with tags, ids, `after`, `until` and durations.
   - Date arithmetic is plain Rust.
-  - Gap: moment's week-date and day-of-year tokens (`GGGG`, `WW`, `E`,
-    `DDDD`), which mermaid's dayjs cannot parse either.
+  - Week dates (`GGGG-[W]WW-E`, locale `gggg`/`ww`/`e` with moment's `en`
+    rules), day of year (`DDDD`) and `k` hours, which mermaid's dayjs cannot
+    parse; formats whose fields conflict are errors rather than letting one
+    win silently. moment's format-only ordinals (`Mo`, `DDDo`, …) and era
+    tokens are errors naming them.
 - **`timeline`**:
   - `LR`/`TD`;
   - sections;
@@ -518,9 +524,12 @@ indentation helpers):
   - one to three sets as circles, four as the classic four-ellipse diagram
     with all fifteen regions, five or more as Euler circles relaxed so that
     declared unions overlap and other pairs keep apart;
-  - a union or text whose region the layout cannot form is an error naming
-    it, never a dropped label.
-  - Gap: five or more sets where every pair intersects.
+  - five sets whose named regions the circles cannot form switch to
+    Grünbaum's five-ellipse diagram (all 31 regions);
+  - with six or more, a region the circles still cannot form is listed under
+    the diagram as `A ∩ C: label` ("Not drawn as a region"), never dropped;
+  - sets are tinted at mermaid's opacity, and a union's `fill` shades the
+    region its sets share.
 - **`wardley-beta`**: the full grammar — components, anchors, links, flows,
   evolve, pipelines, notes, annotations, accelerators.
 - **`eventmodeling`**:
@@ -545,7 +554,9 @@ indentation helpers):
   - `//` comments above a message as notes;
   - `if`/`else if`/`else`, `while`/`for`/`forEach`/`loop`, `opt`, `par`,
     `critical`, `try`/`catch`/`finally`.
-  - Gaps: `ref(…)` and `==dividers==`.
+  - `ref(…)` frames over the participants they name, and `==dividers==`.
+    Neither appears in the checkout's ZenUML material, so both follow
+    zenuml-core's syntax from memory.
 
 ## Architecture
 
@@ -566,10 +577,11 @@ scene the same way.
 | `text` | `wrap`, and a bundled-font `Measure` over `rustybuzz`. |
 | `layered` | The layered graph layout: flowchart, ER, and through `graph`, state, class and requirement. |
 | `graph` | Ports, curves, self-loops, block groups and pinned notes over `layered`, for state, class and requirement. |
-| `chart` | Statements, numbers, round ticks, legends, arcs and stroke fills for the data charts. |
+| `chart` | Statements, numbers, round ticks, legends, arcs and filled areas for the data charts. |
 | `meta` | `title`/`accTitle`/`accDescr`, headers and indentation for the tree and block types. |
 | `style` | `classDef`/`style` declarations and CSS colours. |
 | `frontmatter` | YAML front matter: title drawn, config ignored. |
+| `accessibility` | `accTitle`/`accDescr` into the scene's accessible name and description. |
 
 Flowchart and ER predate `graph` and still carry their own port and curve
 helpers. Moving them onto it is cleanup, not a feature.
@@ -636,53 +648,47 @@ What remains is of three kinds, in priority order.
 
 ### 1. Known gaps
 
-Each is a file in `examples/gaps/` that must keep failing with a line number
-until it is closed. When one closes, the test that requires it to fail starts
-failing; move the file into `examples/`.
+None. `examples/gaps/` is empty: every construct in every type's grammar
+either renders or is an error that mermaid would also reject. A new gap goes
+there as real mermaid input that must fail with a line number until it is
+closed; when it closes, the test that requires it to fail starts failing, and
+the file moves into `examples/`.
 
-| Gap | Notes |
-|:---|:---|
-| `zenuml` `ref(…)` | A reference frame to another diagram. |
-| `zenuml` `==divider==` | A full-width divider; the sequence model has none yet. |
-| `gantt` week-date tokens (`GGGG`, `WW`, `E`, `DDDD`) | Mermaid's dayjs cannot parse these either. |
-| `venn-beta` with five or more sets where every pair intersects | Circles cannot give every pair its own region; needs venn.js's general layout, or ellipses beyond four sets. |
-
-Closed on 2026-10-25:
-- gantt month names and week numbers;
-- decimal `autonumber`;
-- inline state composites;
-- kanban card icons;
-- venn with four or more sets;
-- `zenuml` itself.
+Closed on 2026-10-25: gantt month names, week numbers, week dates and day of
+year; decimal `autonumber`; inline state composites; kanban card icons; venn
+with four or more sets, including every pair intersecting; `zenuml`, with
+`ref` and dividers.
 
 ### 2. Approximations worth narrowing
 
-Each sample's `%% approx:` lines list its own approximations. The ones a
-reader is most likely to notice:
+Each sample's `%% approx:` lines list its own approximations, and the
+coverage matrix counts them. The ones a reader is most likely to notice:
 
 - **Placement:**
   - C4 is placed in declaration order, so related elements can land far
     apart, and crossing relations can crowd their label pills.
   - Architecture uses a grid, not fcose.
   - The mindmap is a tidy tree, not cose.
-- **Fills:**
-  - Charts draw filled areas as strokes: pie wedges, bars, radar areas and
-    sankey ribbons.
-  - Moving this to real filled paths needs fill on `diagram-scene` edges.
 - **Layout:** mmd's layered layout differs from dagre in node positions on
   every graph type. That is accepted under decision 1.
 - **xychart:** bars from several series sit side by side; mermaid stacks
   them.
+- **sankey:** ribbons are one colour, not mermaid's source-to-target
+  gradient.
+- **gitGraph:** commit labels and `TB`/`BT` tags are level where mermaid
+  turns them.
 
 ### 3. Needs `diagram-scene`
 
-These are blocked on the shared scene crate, which mmd pins by tag and does
-not modify:
+`diagram-scene` v2026.10.25 added areas, accessibility, rotated text and
+edge-label colours, and mmd uses all four. What is still out of reach:
 
-- `accTitle`/`accDescr` as SVG `<title>`/`<desc>`.
-- Rotated text: gitGraph tags in `TB`/`BT`, axis titles, wardley link labels.
-- Filled paths, for the charts.
-- Per-label colours, for flowchart `linkStyle color:` and C4 `textColor`.
+- Rotated nodes, for gitGraph tags in `TB`/`BT`.
+- Areas between containers: sequence `rect`/`box` tints are containers, and
+  areas paint over all containers, so `rgba` tints are still blended over
+  white rather than drawn translucent.
+- Non-integer step numbers: decimal `autonumber` draws its own badge because
+  an edge's step is a whole number.
 - Icons, which would need an icon set bundled under decision 2's size
   constraints. Probably never.
 

@@ -97,8 +97,9 @@ typos are errors, not silently ignored.
   - Every cardinality, written as symbols or words.
   - Every relationship needs `: label`; quote a label with spaces.
 - **gantt:**
-  - `dateFormat` takes moment.js tokens, including month and weekday names
-    (`MMM D YYYY`, `Do`, `h:mm A`). It does not take week dates (`GGGG-[W]WW`).
+  - `dateFormat` takes moment.js parse tokens: month and weekday names
+    (`MMM D YYYY`, `Do`, `h:mm A`), week dates (`GGGG-[W]WW-E`), day of year
+    (`YYYY-DDDD`). Not the format-only ordinals (`Mo`, `DDDo`).
   - `axisFormat` takes every strftime directive, including week numbers
     (`%V`, `%W`).
   - `after`, `until`, `excludes weekends`, milestones and `crit` all work.
@@ -113,20 +114,21 @@ typos are errors, not silently ignored.
   - Elements are placed in declaration order, so declare related elements
     next to each other.
 - **venn-beta:** any number of sets. Four sets use the classic four-ellipse
-  diagram. With five or more, a union the circles cannot form is an error.
+  diagram, five that overlap pairwise the five-ellipse one. With six or more,
+  a region the circles cannot form is listed under the diagram, not dropped.
 - **zenuml:** parsed into the sequence model.
   - Supported: participants and annotators, `group`, calls `A.m()` with
     `{ … }` bodies, `x = A.m()`, `return`, `new`, async `A->B: text`, `//`
     comments, `if`/`while`/`for`/`try`/`par`/`opt`.
-  - Not supported: `ref(…)` and `==dividers==`.
+  - Also `ref(…)` frames and `==dividers==`. Not supported: `section(…)`,
+    participant colours and widths.
 - **kanban:** a card's `icon` is drawn as a tag with its name.
 
 ## What it cannot render — do not generate these
 
-- These known gaps fail with an error naming them:
-  - zenuml `ref(…)` and `==dividers==`;
-  - gantt week-date tokens (`GGGG`, `WW`, `E`, `DDDD`);
-  - venn diagrams of five or more sets where every pair intersects.
+- There are no known gaps, but constructs outside mermaid's grammar, or ones
+  mermaid itself rejects, fail with an error naming them, e.g. zenuml
+  `section(…)` or gantt's format-only `Mo`.
 - **Accepted but not drawn:**
   - `accTitle`/`accDescr`;
   - `click`/`link`/`callback` and other interactions;
@@ -146,8 +148,8 @@ construct:
 ```
 mmd: x.mmd: line 1: unrecognised diagram: expected one of `flowchart`, `gitGraph`, … (every keyword above)
 mmd: x.mmd: line 2: front matter key `layout` is not supported; expected `title`, `config` or `displayMode` (see DESIGN.md)
-mmd: x.mmd: line 4: dateFormat token `GGGG` is not supported; use YYYY, YY, Y, Q, MMMM, MMM, … (see DESIGN.md)
-mmd: x.mmd: line 5: `ref` is not supported in zenuml (see DESIGN.md)
+mmd: x.mmd: line 2: dateFormat token `Mo` is not supported: moment only formats it and cannot parse it (see DESIGN.md)
+mmd: x.mmd: line 2: `section` is not supported in zenuml (see DESIGN.md)
 mmd: x.mmd: line 10: `union A,C` cannot be drawn: in mmd's approximate layout of 5 sets those sets share no region of their own (see DESIGN.md)
 mmd: x.mmd: line 3: unrecognised colour `blurple` (see DESIGN.md)
 mmd: x.mmd: line 3: unknown branch `nope`
@@ -170,14 +172,14 @@ grep -c '<text' diagram.svg     # > 0: labels are present
 ```bash
 cat > "$TMPDIR/plan.mmd" <<'END'
 gantt
-    dateFormat GGGG-[W]WW-E
-    Kickoff :a1, 2026-W02-1, 3d
+    dateFormat Mo YYYY
+    Kickoff :a1, 1st 2026, 3d
 END
 mmd "$TMPDIR/plan.mmd"
-# exit 1, no SVG — dateFormat token `GGGG` is not supported
+# exit 1, no SVG — dateFormat token `Mo` is not supported (moment cannot parse it)
 ```
 
-Use a calendar date format instead; month names are fine:
+Use a parseable format instead; month names are fine:
 
 ```bash
 cat > "$TMPDIR/plan.mmd" <<'END'
