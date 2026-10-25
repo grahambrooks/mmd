@@ -1,0 +1,13 @@
+gitGraph TB:
+    commit id: "init"
+    branch release order: 2
+    branch develop order: 1
+    commit id: "parser"
+    commit id: "fix crash" type: HIGHLIGHT
+    checkout release
+    cherry-pick id: "fix crash"
+    commit id: "notes" tag: "v1.0.1"
+    checkout develop
+    commit id: "layout"
+    checkout main
+    merge develop id: "ship" tag: "v1.1"

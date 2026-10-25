@@ -3,7 +3,7 @@
 mod layout;
 mod parse;
 
-pub use parse::{Branch, Commit, CommitType, GitGraph, parse};
+pub use parse::{Branch, Commit, CommitType, Direction, GitGraph, Origin, parse};
 
 use diagram_scene::Scene;
 
