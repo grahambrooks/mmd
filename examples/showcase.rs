@@ -136,13 +136,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tree = usvg::Tree::from_str(&svg, &options)?;
         let size = tree.size();
 
-        // Scale to the text measure, never up.
+        // Scale to the text measure and to what a fresh page can hold
+        // below the heading and prose, never up.
+        let prose_lines = wrap(sample.prose, 78);
         let available = PAGE_WIDTH - MARGIN * 2.0;
-        let scale = (available / size.width()).min(1.0);
+        let page_room =
+            PAGE_HEIGHT - MARGIN * 2.0 - 20.0 - (26.0 + prose_lines.len() as f32 * LEADING + 30.0);
+        let scale = (available / size.width())
+            .min(page_room / size.height())
+            .min(1.0);
         let drawn = Size::from_wh(size.width() * scale, size.height() * scale)
             .ok_or("diagram has no size")?;
 
-        let prose_lines = wrap(sample.prose, 78);
         let needed = 26.0 + prose_lines.len() as f32 * LEADING + drawn.height() + 30.0;
         if y + needed > PAGE_HEIGHT - MARGIN {
             surface.finish();

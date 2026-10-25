@@ -14,5 +14,8 @@ flowchart TD
     scene -.-> svg[/SVG for files/]
     paint --o done((Shown))
     svg --x failed{{Unsupported}}
+    svg --> pdf@{ shape: doc, label: "PDF via **md2pdf**" }
     classDef hot fill:#f9d77e,stroke:#b8860b,color:#222
     class debounce hot
+    style tools fill:#eef4fb,stroke:#5b7fa6,color:#2b4a6f
+    linkStyle 2 stroke:#b8860b,stroke-width:2px
