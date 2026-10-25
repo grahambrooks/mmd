@@ -1,15 +1,10 @@
 //! The thin base the data charts (pie, xychart, quadrant, radar, sankey)
-//! share: reading statements, numbers and quoted text, and drawing what
-//! `diagram_scene` has no primitive for.
-//!
-//! The scene strokes edges but never fills them, so a filled region (a pie
-//! wedge, a radar area, a sankey ribbon) is drawn as a hatch of strokes:
-//! dense and heavy where mermaid fills solid, sparse and thin where it fills
-//! translucent. A painter needs nothing new to draw it.
+//! share: reading statements, numbers and quoted text, and the shapes they
+//! draw with — arcs, closed outlines, filled [`Area`]s and rotated text.
 
 use diagram_scene::{
-    Anchor, Dash, Edge, Font, Legend, LegendEntry, Marker, Paint, Pen, Point, Rect, Role, Seg,
-    Shape, Style, Text, TextLine, Weight,
+    Anchor, Area, Dash, Edge, Font, Legend, LegendEntry, Marker, Paint, Pen, Point, Rect, Role,
+    Seg, Shape, Style, Text, TextLine, Weight,
 };
 
 use crate::text::Measure;
@@ -239,14 +234,19 @@ pub(crate) fn segment(a: Point, b: Point) -> Vec<Seg> {
 /// An edge drawing `path` with no markers.
 pub(crate) fn stroke(path: Vec<Seg>, paint: Paint, weight: Weight) -> Edge {
     Edge {
-        pen: Pen {
-            dash: Dash::Solid,
-            weight,
-            paint,
-        },
+        pen: pen(paint, weight),
         start: Marker::None,
         end: Marker::None,
         ..Edge::new(path)
+    }
+}
+
+/// A solid pen.
+pub(crate) fn pen(paint: Paint, weight: Weight) -> Pen {
+    Pen {
+        dash: Dash::Solid,
+        weight,
+        paint,
     }
 }
 
@@ -278,61 +278,43 @@ pub(crate) fn arc(center: Point, radius: f32, a0: f32, a1: f32) -> Vec<Seg> {
     out
 }
 
-/// Points along an arc, about every two degrees.
-pub(crate) fn arc_points(center: Point, radius: f32, a0: f32, a1: f32) -> Vec<Point> {
-    let n = (((a1 - a0).abs() / 2f32.to_radians()).ceil() as usize).max(1);
-    (0..=n)
-        .map(|i| polar(center, radius, a0 + (a1 - a0) * i as f32 / n as f32))
-        .collect()
-}
-
-/// Horizontal strokes `pitch` apart filling the polygon `poly`, each pulled
-/// in by `inset` (half the stroke width, so round caps stay inside).
-pub(crate) fn hatch(poly: &[Point], pitch: f32, inset: f32) -> Vec<Seg> {
-    hatch_within(poly, pitch, inset, inset)
-}
-
-/// [`hatch`] with the strokes' ends pulled in by `side` rather than
-/// `inset`: less, so a fill reaches under an outline drawn over its edge.
-pub(crate) fn hatch_within(poly: &[Point], pitch: f32, inset: f32, side: f32) -> Vec<Seg> {
-    let mut out = Vec::new();
-    if poly.len() < 3 {
-        return out;
+/// A filled region: `path` in `fill`, at `opacity`, outlined by `stroke`.
+pub(crate) fn area(path: Vec<Seg>, fill: Paint, opacity: f32, stroke: Option<Pen>) -> Area {
+    Area {
+        opacity,
+        stroke,
+        ..Area::new(path, fill)
     }
-    let (ymin, ymax) = poly.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
-        (lo.min(p.y), hi.max(p.y))
-    });
-    let rows: Vec<f32> = if ymax - ymin <= 2.0 * inset {
-        vec![(ymin + ymax) / 2.0]
-    } else {
-        let n = ((ymax - ymin - 2.0 * inset) / pitch).ceil().max(1.0) as usize;
-        (0..=n)
-            .map(|i| ymin + inset + (ymax - ymin - 2.0 * inset) * i as f32 / n as f32)
-            .collect()
-    };
-    for y in rows {
-        let mut xs: Vec<f32> = Vec::new();
-        for i in 0..poly.len() {
-            let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
-            if (a.y <= y && y < b.y) || (b.y <= y && y < a.y) {
-                xs.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+}
+
+/// A closed rectangle.
+pub(crate) fn rect_path(r: Rect) -> Vec<Seg> {
+    vec![
+        Seg::Move(Point::new(r.x, r.y)),
+        Seg::Line(Point::new(r.right(), r.y)),
+        Seg::Line(Point::new(r.right(), r.bottom())),
+        Seg::Line(Point::new(r.x, r.bottom())),
+        Seg::Close,
+    ]
+}
+
+/// Every point of `path` moved by `(dx, dy)`.
+pub(crate) fn move_path(path: &mut [Seg], dx: f32, dy: f32) {
+    for seg in path {
+        match seg {
+            Seg::Move(p) | Seg::Line(p) => *p = p.offset(dx, dy),
+            Seg::Cubic(a, b, p) => {
+                *a = a.offset(dx, dy);
+                *b = b.offset(dx, dy);
+                *p = p.offset(dx, dy);
             }
-        }
-        xs.sort_by(f32::total_cmp);
-        for pair in xs.as_chunks::<2>().0 {
-            let (mut x0, mut x1) = (pair[0] + side, pair[1] - side);
-            if x1 < x0 {
-                let mid = (pair[0] + pair[1]) / 2.0;
-                (x0, x1) = (mid, mid);
-            }
-            out.push(Seg::Move(Point::new(x0, y)));
-            out.push(Seg::Line(Point::new(x1, y)));
+            Seg::Close => {}
         }
     }
-    out
 }
 
-/// The points of a path, flattened, for hatching a curved outline.
+/// The points of a path, flattened.
+#[cfg(test)]
 pub(crate) fn outline_points(path: &[Seg]) -> Vec<Point> {
     diagram_scene::flatten::flatten(path, 0.5)
         .into_iter()
@@ -349,16 +331,44 @@ pub(crate) fn bounds(points: impl IntoIterator<Item = Point>) -> Option<Rect> {
         .reduce(|a, b| a.union(&b))
 }
 
-/// A text's extent as drawn: `pos` is its baseline at `anchor`.
+/// A text's extent as drawn: `pos` is its baseline at `anchor`, and the
+/// text turns `rotate` degrees clockwise about it, so a text at −90° spans
+/// its width vertically and its height to the left of `pos`.
 pub(crate) fn text_rect(t: &Text, measure: &dyn Measure) -> Rect {
     let size = t.line.font().size(FONT_SIZE);
     let w = diagram_scene::line_width(measure, &t.line, FONT_SIZE);
     let x = match t.anchor {
-        Anchor::Start => t.pos.x,
-        Anchor::Middle => t.pos.x - w / 2.0,
-        Anchor::End => t.pos.x - w,
+        Anchor::Start => 0.0,
+        Anchor::Middle => -w / 2.0,
+        Anchor::End => -w,
     };
-    Rect::new(x, t.pos.y - size * 0.8, w, size * 1.05)
+    let level = Rect::new(x, -size * 0.8, w, size * 1.05);
+    if t.rotate == 0.0 {
+        return Rect::new(
+            t.pos.x + level.x,
+            t.pos.y + level.y,
+            level.width,
+            level.height,
+        );
+    }
+    let (sin, cos) = t.rotate.to_radians().sin_cos();
+    [
+        (level.x, level.y),
+        (level.right(), level.y),
+        (level.right(), level.bottom()),
+        (level.x, level.bottom()),
+    ]
+    .into_iter()
+    .map(|(x, y)| {
+        Rect::new(
+            t.pos.x + x * cos - y * sin,
+            t.pos.y + x * sin + y * cos,
+            0.0,
+            0.0,
+        )
+    })
+    .reduce(|a, b| a.union(&b))
+    .expect("four corners")
 }
 
 #[cfg(test)]
@@ -381,9 +391,10 @@ pub(crate) mod tests {
         all.extend(scene.legend.iter().map(|l| l.rect));
         all.extend(scene.nodes.iter().map(|n| n.rect));
         all.extend(scene.containers.iter().map(|c| c.rect));
-        for e in &scene.edges {
+        let paths = scene.edges.iter().map(|e| &e.path);
+        for path in paths.chain(scene.areas.iter().map(|a| &a.path)) {
             all.extend(
-                outline_points(&e.path)
+                outline_points(path)
                     .into_iter()
                     .map(|p| Rect::new(p.x, p.y, 0.0, 0.0)),
             );
@@ -415,21 +426,22 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn hatching_stays_inside_its_polygon() {
-        let square = [
-            Point::new(0.0, 0.0),
-            Point::new(10.0, 0.0),
-            Point::new(10.0, 10.0),
-            Point::new(0.0, 10.0),
-        ];
-        let segs = hatch(&square, 4.0, 2.5);
-        assert!(!segs.is_empty());
-        for p in outline_points(&segs) {
-            assert!(
-                (2.5..=7.5).contains(&p.x) && (2.5..=7.5).contains(&p.y),
-                "{p:?}"
-            );
-        }
+    fn a_rotated_text_spans_its_width_vertically() {
+        let mut t = text(
+            Point::new(20.0, 100.0),
+            Anchor::Middle,
+            "abcdefghij",
+            Font::Body,
+            Paint::Role(Role::Text),
+        );
+        let level = text_rect(&t, &Fixed);
+        t.rotate = -90.0;
+        let r = text_rect(&t, &Fixed);
+        assert!((r.height - level.width).abs() < 1e-3, "{r:?}");
+        assert!((r.width - level.height).abs() < 1e-3, "{r:?}");
+        assert!((r.center().y - 100.0).abs() < 1e-3, "{r:?}");
+        // Ascent to the left of the baseline, reading upwards.
+        assert!(r.x < 20.0 - FONT_SIZE * 0.7 && r.right() < 20.0 + FONT_SIZE * 0.3);
     }
 
     #[test]

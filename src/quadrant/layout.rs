@@ -13,8 +13,6 @@ use crate::{FONT_SIZE, PADDING};
 
 const SIDE: f32 = 400.0;
 const RADIUS: f32 = 5.0;
-/// The widest a y-axis label may be before it wraps.
-const Y_LABEL_WIDTH: f32 = 110.0;
 
 pub(crate) fn layout(q: &Quadrant, measure: &dyn Measure) -> Scene {
     let mut scene = Scene::new(0.0, 0.0);
@@ -22,25 +20,31 @@ pub(crate) fn layout(q: &Quadrant, measure: &dyn Measure) -> Scene {
     let small = Font::Small.size(FONT_SIZE);
     let title_h = chart::place_title(&q.title, 0.0).1;
 
-    // The y-axis labels sit left of the square, wrapped.
-    let y_labels: Vec<(f32, Vec<String>)> = {
-        let mid = q.y_top.is_some();
-        [
-            (&q.y_bottom, if mid { 0.75 } else { 0.95 }),
-            (&q.y_top, 0.25),
-        ]
-        .into_iter()
-        .filter_map(|(t, at)| {
-            t.as_ref()
-                .map(|t| (at, wrap(measure, t, FONT_SIZE, false, Y_LABEL_WIDTH)))
-        })
-        .collect()
-    };
-    let y_width = y_labels
+    // The y-axis labels run up the square's left edge, rotated as mermaid
+    // draws them: centred on their halves when there are two, and a lone
+    // one starting from the bottom corner. Each wraps to the length it has.
+    let both = q.y_top.is_some();
+    let length = if both { SIDE / 2.0 } else { SIDE } - 16.0;
+    let y_labels: Vec<(f32, Anchor, Vec<String>)> = [
+        (
+            &q.y_bottom,
+            if both { 0.75 } else { 1.0 },
+            if both { Anchor::Middle } else { Anchor::Start },
+        ),
+        (&q.y_top, 0.25, Anchor::Middle),
+    ]
+    .into_iter()
+    .filter_map(|(t, at, anchor)| {
+        t.as_ref()
+            .map(|t| (at, anchor, wrap(measure, t, FONT_SIZE, false, length)))
+    })
+    .collect();
+    let y_rows = y_labels
         .iter()
-        .flat_map(|(_, lines)| lines)
-        .map(|l| measure.width(l, FONT_SIZE, false))
-        .fold(0.0_f32, f32::max);
+        .map(|(_, _, lines)| lines.len())
+        .max()
+        .unwrap_or(0);
+    let y_width = y_rows as f32 * line_h;
     let has_x = q.x_left.is_some() || q.x_right.is_some();
     // With points the x-axis labels go underneath, as in mermaid.
     let x_on_top = has_x && q.points.is_empty();
@@ -142,15 +146,18 @@ pub(crate) fn layout(q: &Quadrant, measure: &dyn Measure) -> Scene {
         }
         (None, None) => {}
     }
-    for (at, lines) in &y_labels {
-        let centre = top + SIDE * at;
-        let first = centre - (lines.len() as f32 - 1.0) * line_h / 2.0 + FONT_SIZE * 0.35;
+    for (at, anchor, lines) in &y_labels {
+        // Rotated, a line's ascent lies to the left of its baseline and the
+        // next line sits to its right; the last line hugs the square.
+        let first = left - 12.0 - FONT_SIZE * 0.25 - (lines.len() as f32 - 1.0) * line_h;
         for (i, l) in lines.iter().enumerate() {
-            scene.texts.push(axis_text(
-                Point::new(left - 12.0, first + i as f32 * line_h),
-                Anchor::End,
+            let mut t = axis_text(
+                Point::new(first + i as f32 * line_h, top + SIDE * at),
+                *anchor,
                 l,
-            ));
+            );
+            t.rotate = -90.0;
+            scene.texts.push(t);
         }
     }
 
@@ -282,6 +289,10 @@ mod tests {
         }
         assert_eq!(s.nodes.len(), 3);
         assert_eq!(s.nodes[1].style.fill, Paint::Rgb(255, 0, 0));
+        for t in &s.texts {
+            let y_axis = ["Low value", "High value"].contains(&t.line.plain().as_str());
+            assert_eq!(t.rotate, if y_axis { -90.0 } else { 0.0 }, "{t:?}");
+        }
         assert_inside(&s);
     }
 
@@ -291,6 +302,19 @@ mod tests {
         assert_eq!(s.containers.len(), 4);
         assert_inside(&s);
         let s = scene("quadrantChart\n  x-axis Only left\n  quadrant-1 One\n");
+        assert_inside(&s);
+    }
+
+    #[test]
+    fn long_y_axis_labels_wrap_beside_the_square() {
+        let long = "a y-axis label much longer than half the square is tall";
+        let s = scene(&format!("quadrantChart\n  y-axis {long} --> {long}\n"));
+        assert!(s.texts.iter().filter(|t| t.rotate == -90.0).count() > 2);
+        assert_inside(&s);
+        let s = scene(&format!("quadrantChart\n  y-axis {long}\n"));
+        let lone: Vec<_> = s.texts.iter().filter(|t| t.rotate == -90.0).collect();
+        assert!(!lone.is_empty());
+        assert!(lone.iter().all(|t| t.anchor == Anchor::Start));
         assert_inside(&s);
     }
 

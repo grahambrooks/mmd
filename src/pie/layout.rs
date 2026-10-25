@@ -1,7 +1,9 @@
 //! A pie: slices clockwise from twelve o'clock in source order, percentages
 //! on the slices, and a legend to the right.
 
-use diagram_scene::{Anchor, Font, Node, Paint, Point, Rect, Role, Scene, Shape, Style, Weight};
+use diagram_scene::{
+    Anchor, Font, Node, Paint, Point, Rect, Role, Scene, Seg, Shape, Style, Weight,
+};
 
 use super::parse::Pie;
 use crate::chart;
@@ -9,10 +11,6 @@ use crate::text::Measure;
 use crate::{FONT_SIZE, PADDING};
 
 const RADIUS: f32 = 130.0;
-/// Heavy strokes are 5 px; 2.5 px apart they overlap into a solid fill
-/// with no gap at a shallow rim.
-const PITCH: f32 = 2.5;
-const INSET: f32 = 2.5;
 
 pub(crate) fn layout(pie: &Pie, measure: &dyn Measure) -> Scene {
     let total: f64 = pie.slices.iter().map(|s| s.value).sum();
@@ -29,27 +27,28 @@ pub(crate) fn layout(pie: &Pie, measure: &dyn Measure) -> Scene {
         let sweep = (slice.value / total) as f32 * std::f32::consts::TAU;
         let (a0, a1) = (angle, angle + sweep);
         angle = a1;
-        if sweep <= 0.0 {
-            continue;
+        if sweep > 0.0 {
+            bounds.push((a0, a1, i));
         }
-        let mut wedge = vec![center];
-        wedge.extend(chart::arc_points(center, RADIUS, a0, a1));
-        scene.edges.push(chart::stroke(
-            chart::hatch_within(&wedge, PITCH, INSET, 0.5),
-            Paint::Role(Role::Series(i as u8)),
-            Weight::Heavy,
-        ));
-        bounds.push((a0, a1, i));
     }
-    // Separators in the background colour, as mermaid strokes its slices.
-    if bounds.len() > 1 {
-        for &(a0, _, _) in &bounds {
-            scene.edges.push(chart::stroke(
-                chart::segment(center, chart::polar(center, RADIUS, a0)),
-                Paint::Role(Role::Background),
-                Weight::Thick,
-            ));
-        }
+    // Wedges outlined in the background colour, as mermaid strokes its
+    // slices, so neighbours read apart; a lone slice needs no outline.
+    let outline =
+        (bounds.len() > 1).then(|| chart::pen(Paint::Role(Role::Background), Weight::Thick));
+    for &(a0, a1, i) in &bounds {
+        let mut wedge = vec![
+            Seg::Move(center),
+            Seg::Line(chart::polar(center, RADIUS, a0)),
+        ];
+        // The arc after its opening move.
+        wedge.extend(chart::arc(center, RADIUS, a0, a1).into_iter().skip(1));
+        wedge.push(Seg::Close);
+        scene.areas.push(chart::area(
+            wedge,
+            Paint::Role(Role::Series(i as u8)),
+            1.0,
+            outline,
+        ));
     }
     let mut ring = Node::new(
         "pie",
@@ -129,8 +128,27 @@ mod tests {
     fn a_zero_slice_keeps_its_legend_entry() {
         let s = scene("pie\n  \"Some\" : 5\n  \"None\" : 0\n");
         assert!(s.texts().iter().any(|t| t == "None"));
-        // One wedge, no separators for a lone slice.
-        assert_eq!(s.edges.len(), 1);
+        // One wedge, unoutlined for a lone slice.
+        assert_eq!(s.areas.len(), 1);
+        assert_eq!(s.areas[0].stroke, None);
+        assert!(s.edges.is_empty());
+        assert_inside(&s);
+    }
+
+    #[test]
+    fn wedges_are_solid_areas_in_series_colours() {
+        let s = scene("pie\n  \"a\" : 1\n  \"b\" : 2\n  \"c\" : 3\n");
+        assert_eq!(s.areas.len(), 3);
+        assert!(s.edges.is_empty(), "no hatching");
+        for (i, a) in s.areas.iter().enumerate() {
+            assert_eq!(a.fill, Paint::Role(Role::Series(i as u8)));
+            assert_eq!(a.opacity, 1.0);
+            assert_eq!(
+                a.stroke.map(|p| p.paint),
+                Some(Paint::Role(Role::Background))
+            );
+            assert_eq!(a.path.last(), Some(&Seg::Close));
+        }
         assert_inside(&s);
     }
 

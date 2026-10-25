@@ -29,8 +29,9 @@ fn rects(scene: &Scene) -> Vec<Rect> {
 fn drawn(scene: &Scene) -> Option<Rect> {
     let mut all: Vec<Rect> = scene.nodes.iter().map(|n| n.rect).collect();
     all.extend(scene.containers.iter().map(|c| c.rect));
-    for edge in &scene.edges {
-        for poly in mmd::scene::flatten::flatten(&edge.path, 0.5) {
+    let paths = scene.edges.iter().map(|e| &e.path);
+    for path in paths.chain(scene.areas.iter().map(|a| &a.path)) {
+        for poly in mmd::scene::flatten::flatten(path, 0.5) {
             all.extend(poly.points.iter().map(|p| Rect::new(p.x, p.y, 0.0, 0.0)));
         }
     }
