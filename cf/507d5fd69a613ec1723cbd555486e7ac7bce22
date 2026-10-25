@@ -1,0 +1,52 @@
+examples/class.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-34
+examples/gaps/state-inline-composite.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-6
+src/class/parse.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-959
+src/class/layout.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-308
+src/requirement/mod.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-19
+src/graph.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-1108
+examples/state-concurrency.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-21
+examples/state.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-35
+src/state/parse.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-767
+src/class/mod.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-19
+src/lib.rs
+  s_0c7b5d39344b95::t_31aaa2d14d2537 21
+  s_0c7b5d39344b95::t_31dd2a3e04617e 16,25,27,59-61,81-83,102-104,114-116,217-219
+src/state/layout.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-367
+examples/requirement.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-45
+src/requirement/layout.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-147
+examples/class-namespaces.mmd
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-31
+src/state/mod.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-17
+src/requirement/parse.rs
+  s_0c7b5d39344b95::t_31dd2a3e04617e 1-611
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf507d5fd69a613ec1723cbd555486e7ac7bce22",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
