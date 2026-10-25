@@ -29,10 +29,12 @@ source ──parse──> model ──layout──> Scene ──diagram_scene::s
 
 Each diagram type owns its `parse` and `layout` and shares only a thin base:
 `text` (the `Measure` trait plus bundled fonts), `layered` (the layered
-graph layout flowcharts and ER use) and `style` (`classDef`/`style`
-declarations and CSS colours). The `Scene`, its shapes and markers, the theme
-and the SVG writer live in the `diagram-scene` crate, shared with puml and
-forge.
+graph layout), `graph` (ports, curves, groups and notes over `layered`, for
+state, class and requirement), `chart` (ticks, legends and fills for the
+data charts), `meta` (title, accessibility and indentation for the tree
+types), `style` (`classDef`/`style` and CSS colours) and `frontmatter`.
+The `Scene`, its shapes and markers, the theme and the SVG writer live in the
+`diagram-scene` crate, shared with puml and forge.
 
 **Layout stops at a `Scene`** — positioned shapes and text in diagram
 coordinates. That is what lets layout be tested without string-matching SVG,
@@ -50,30 +52,48 @@ Two things worth knowing before editing a layout:
 
 ## Adding a diagram type
 
-`src/<type>/{mod,parse,layout}.rs`, a `Kind` variant with arms in `detect()`
-and `scene()`, a sample in `examples/`, and a case in `examples/showcase.rs`.
+Every upstream type except `zenuml` already has a module, so this is rare
+now. When it happens, the type needs:
+
+- `src/<type>/{mod,parse,layout}.rs`.
+- In `lib.rs`: a `Kind` variant, an entry in `Kind::ALL`, `keyword()`,
+  `aliases()` and a `scene()` arm. `detect()` is driven by `Kind::ALL`.
+- `examples/<type>.mmd`.
+
 Nothing else should need to change — if it does, the base is wrong.
 
-The order of new types is the **Roadmap** in DESIGN.md — update it when a type
-lands. Sebastian's measurements shaped it: C4, gitGraph, sequence, gantt and
-most chart types need no graph-layout engine. State, class and requirement
-need one, but `layered` already exists. ER proved that, so they don't need
-`dagre` either.
+## Samples, gaps and approximations
+
+The showcase and `tests/render.rs` discover their inputs; neither lists
+files.
+
+- **`examples/*.mmd`** must render. Each one opens with `%% showcase:`,
+  `%% prose:` and `%% approx:` caption lines, which mmd reads as comments.
+- **`examples/gaps/*.mmd`** is real mermaid input mmd does not handle yet.
+  Each must fail with a line number. When you close a gap, move its file into
+  `examples/`, because the test that requires it to fail will start failing.
+- **Coverage before accuracy.** A drawing may differ from mermaid's if the
+  difference is written down as an `%% approx:` line in its sample. Never
+  drop input silently.
+
+What remains is the **Roadmap** in DESIGN.md: known gaps, approximations
+worth narrowing, and work blocked on `diagram-scene`.
 
 ## Unsupported is an error, not an omission
 
 Anything outside the subset in DESIGN.md must fail with a line number and name
-the construct — `` shape `bolt` is not supported (see DESIGN.md) ``. That
+the construct — `` a venn diagram of more than 3 sets is not supported (see DESIGN.md) ``. That
 includes values: a colour that cannot be read is an error, not a fallback to
 the theme. The few statements that are accepted but not drawn are listed in
-DESIGN.md, and none of them may lose an element. A diagram
-that quietly loses an element is worse than one that refuses to render.
+DESIGN.md, and none of them may lose an element. A diagram that quietly
+loses an element is worse than one that refuses to render.
 
 ## Commands
 
 ```bash
 make check          # fmt-check + clippy + test — the pre-commit gate
-make showcase       # target/showcase.pdf — every diagram plus prose
+make showcase       # target/showcase.pdf — coverage matrix, samples, gaps
+make showcase-pages # …and each page as target/showcase/pageN.png (macOS)
 cargo test --test render          # integration tests only
 cargo build --no-default-features # must keep working: no bundled fonts
 ```
@@ -83,10 +103,10 @@ cargo build --no-default-features # must keep working: no bundled fonts
 
 **Look at the PDF when you change a layout.** Tests prove nothing was dropped
 and that boxes do not overlap; they cannot tell you a label collided with a
-curve or that a tag was clipped at the top edge. `make showcase`, then render
-page 1 (`qlmanage -t -s 1400 -o . target/showcase.pdf`) and look. The PDF
-has one page per sample and `qlmanage` renders only the first, so move the
-sample you changed to the front while you look, then put it back.
+curve or that a tag was clipped at the top edge. Run `make showcase-pages`
+(macOS). It writes `target/showcase/pageN.png`, one PNG per page. Page 1 is
+the coverage matrix; each diagram type then starts its own page. Look at the
+pages for the type you changed.
 Don't judge text fit from `rsvg-convert` or a browser: they substitute fonts
 for the bundled ones, so tables and labels can look overfull when they are
 not.
@@ -94,12 +114,10 @@ not.
 ## Reference material
 
 `mermaid/` is a checkout of the upstream mermaid.js repo, gitignored, kept for
-grammar reference. The authoritative sources for the current subset are
-`packages/parser/src/language/gitGraph/gitGraph.langium` and
-`packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison`,
-`packages/mermaid/src/diagrams/flowchart/parser/flow.jison` and
-`packages/mermaid/src/diagrams/er/parser/erDiagram.jison`. Check the grammar
-there rather than inferring syntax from examples.
+grammar reference. Each type's grammar is under
+`packages/mermaid/src/diagrams/<type>/` (jison) or
+`packages/parser/src/language/<type>/` (langium). Check the grammar there
+rather than inferring syntax from examples.
 
 ## Git and release
 

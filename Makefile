@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt fmt-check check pre-commit showcase install uninstall clean update outdated release release-dry-run
+.PHONY: help build test lint fmt fmt-check check pre-commit showcase showcase-pages install uninstall clean update outdated release release-dry-run
 
 VERSION := $(shell date +%Y.%-m.%-d)
 TAG := v$(VERSION)
@@ -18,7 +18,8 @@ help:
 	@echo "  test             Run all tests"
 	@echo "  lint             Run clippy with warnings denied"
 	@echo "  fmt              Format the code"
-	@echo "  showcase         Render every supported diagram into target/showcase.pdf"
+	@echo "  showcase         Coverage matrix, samples and gaps into target/showcase.pdf"
+	@echo "  showcase-pages   Also render each page to target/showcase/pageN.png (macOS)"
 	@echo ""
 	@echo "Installation:"
 	@echo "  install          Build and install to $(PREFIX)/bin"
@@ -55,6 +56,9 @@ pre-commit: check
 
 showcase:
 	cargo run --example showcase
+
+showcase-pages: showcase
+	swift scripts/showcase-pages.swift target/showcase.pdf target/showcase
 
 install: build
 	install -d $(PREFIX)/bin

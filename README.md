@@ -4,10 +4,11 @@ Render [Mermaid](https://mermaid.js.org) diagrams to SVG, for web and PDF
 publication. Pure Rust: no Node, no browser, no JavaScript runtime, no C
 toolchain.
 
-> **Status:** early development, released as CalVer builds. Flowcharts,
-> gitGraph, C4 (context, container, component) and ER diagrams render; see [DESIGN.md](DESIGN.md) for the
-> exact supported syntax, what is deliberately out of scope, and the
-> [roadmap](DESIGN.md#roadmap) for the other diagram types.
+> **Status:** early development, released as CalVer builds. 32 of mermaid's
+> 33 diagram types render — every one except the external `zenuml` plugin.
+> Coverage comes before accuracy: where a drawing knowingly differs from
+> mermaid's, the sample says so. See [DESIGN.md](DESIGN.md) for the exact
+> syntax and the [roadmap](DESIGN.md#roadmap) for what remains.
 
 ## Why
 
@@ -53,25 +54,30 @@ mmd = { version = "*", default-features = false }
 
 ## Supported diagrams
 
-| Diagram | Supported |
+| Group | Diagram types |
 |:---|:---|
-| `flowchart`/`graph` | `TB`/`TD`/`BT`/`LR`/`RL`; every bracket shape and the v11 `@{ shape: … }` names that map to them; `-->`, `---`, `-.->`, `==>`, `--o`, `--x`, `<-->`, `~~~` with `\|labels\|` or `-- text -->`; edge ids; chains and `&`; nested `subgraph` with its own `direction`; markdown strings; `classDef`, `class`, `:::`, `style`, `linkStyle` |
-| `gitGraph` | `LR`/`TB`/`BT`; `commit` (`id:`, `msg:`, `tag:`, `type:`), `branch` (`order:`), `checkout`/`switch`, `merge` (`id:`, `tag:`, `type:`), `cherry-pick`, `title` |
-| `C4Context`, `C4Container`, `C4Component` | `Person`, `System`, `Container`, `Component` with their `Db`/`Queue`/`_Ext` variants; nested `*Boundary`; `Rel`, `BiRel`, `Rel_Back`, `Rel_U/D/L/R`; `UpdateLayoutConfig`; `title` |
-| `erDiagram` | Entities with attribute tables (`PK`/`FK`/`UK`, comments); every cardinality, symbolic or in words; identifying and non-identifying lines; aliases; `direction`; `classDef`, `class`, `:::`, `style` |
+| Graphs | `flowchart`/`graph` (every v11 shape), `stateDiagram-v2`, `classDiagram`, `erDiagram`, `requirementDiagram`, `block` |
+| Architecture | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`, `architecture-beta` |
+| Interactions | `sequenceDiagram`, `gitGraph`, `eventmodeling` |
+| Time | `gantt`, `timeline`, `journey`, `kanban` |
+| Charts | `pie`, `xychart`, `quadrantChart`, `radar-beta`, `sankey` |
+| Trees and maps | `mindmap`, `treemap`, `treeView-beta`, `ishikawa`, `packet`, `venn-beta`, `wardley-beta` |
+| Other | `info` |
 
-Colours in styles are hex, `rgb()` or CSS names. Next, in
-[roadmap](DESIGN.md#roadmap) order: `stateDiagram`, `classDiagram` and
-`requirementDiagram` on the existing layered layout; then `sequenceDiagram`,
-`gantt`, `pie` and the other self-laid-out types. Every other diagram type is
-rejected today.
+YAML front matter is accepted: its `title` is drawn and its `config` ignored,
+as `%%{init}%%` directives are. Colours in styles are hex, `rgb()` or CSS
+names.
+
+`make showcase` builds `target/showcase.pdf`. It opens with a coverage
+matrix, then shows every sample with its recorded approximations, and every
+known gap as the error mmd reports.
 
 Anything outside that subset is a **parse error naming the construct and its
 line** — never a silently missing element:
 
 ```console
 $ mmd notes.mmd
-mmd: notes.mmd: line 7: shape `bolt` is not supported (see DESIGN.md)
+mmd: team.mmd: line 7: a venn diagram of more than 3 sets is not supported (see DESIGN.md)
 ```
 
 Adding a diagram type is a self-contained module: parse and layout to a
@@ -80,7 +86,7 @@ Adding a diagram type is a self-contained module: parse and layout to a
 ## See it
 
 ```console
-$ make showcase     # target/showcase.pdf — every supported diagram, plus prose
+$ make showcase     # target/showcase.pdf — coverage matrix, samples and gaps
 ```
 
 That PDF is the visual check the test suite cannot make. Tests prove nothing
