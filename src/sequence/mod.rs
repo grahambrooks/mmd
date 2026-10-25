@@ -4,7 +4,7 @@ mod layout;
 mod parse;
 
 pub use parse::{
-    Event, Frame, Head, Message, Note, NoteSide, Participant, ParticipantBox, ParticipantKind,
+    Event, Frame, Head, Message, Note, NoteSide, Participant, ParticipantBox, ParticipantKind, Ref,
     Sequence, parse,
 };
 

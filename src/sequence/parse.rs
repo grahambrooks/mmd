@@ -167,6 +167,22 @@ pub enum Event {
     /// `else`, `and` or `option`: a dashed divider and its label.
     Section(String),
     End,
+    /// ZenUML's `ref(…)`: an interaction use, a `ref` frame of its own
+    /// row; sequenceDiagram has no statement for it.
+    Ref(Ref),
+    /// ZenUML's `==label==`: a rule across every lifeline, its label on
+    /// a pill; sequenceDiagram has no statement for it.
+    Divider(String),
+}
+
+/// A reference to another interaction, drawn as a `ref` frame.
+#[derive(Debug, Clone, Default)]
+pub struct Ref {
+    /// What the frame names, centred in it.
+    pub label: String,
+    /// The participants it spans, leftmost to rightmost column; empty
+    /// spans them all.
+    pub participants: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Default)]

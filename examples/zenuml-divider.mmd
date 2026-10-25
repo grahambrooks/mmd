@@ -1,0 +1,8 @@
+%% showcase: zenuml dividers
+%% prose: `==text==` draws a labelled divider across every lifeline: a double rule from the first participant to the last, with the text on a pill in the middle. The label is the line with its `=` fences trimmed, so `== Later ==` reads the same.
+%% approx: The divider is a double rule with a pill, mmd's sequence look rather than ZenUML's.
+zenuml
+    Alice->Bob: Hello
+    Bob->Carol: Pass it on
+    ==Later that day==
+    Carol->Alice: Bye

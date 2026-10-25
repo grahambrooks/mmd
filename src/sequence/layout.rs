@@ -17,7 +17,7 @@ use diagram_scene::{
 };
 
 use super::parse::{
-    Event, Frame, Head, Message, Note, NoteSide, Number, ParticipantKind, Sequence,
+    Event, Frame, Head, Message, Note, NoteSide, Number, ParticipantKind, Ref, Sequence,
 };
 use crate::text::{Measure, wrap};
 use crate::{FONT_SIZE, PADDING};
@@ -143,6 +143,8 @@ impl<'a> Layout<'a> {
                 Event::Start(_, label) | Event::Section(label) => {
                     l.split(&bracket(label), false, 0.0)
                 }
+                Event::Ref(r) => l.split(&r.label, false, 0.0),
+                Event::Divider(label) => l.split(label, false, 0.0),
                 _ => Vec::new(),
             })
             .collect();
@@ -383,6 +385,13 @@ impl<'a> Layout<'a> {
                         _ => {}
                     }
                 }
+                Event::Ref(r) => {
+                    let (lo, hi) = self.ref_span(r);
+                    if lo != hi {
+                        let edges = (self.heads[lo].width + self.heads[hi].width) / 2.0;
+                        needs.push((lo, hi, self.ref_width(lines) - edges));
+                    }
+                }
                 _ => {}
             }
         }
@@ -452,6 +461,8 @@ impl<'a> Layout<'a> {
                 Event::Start(frame, label) => self.open_frame(*frame, label),
                 Event::Section(label) => self.section(label),
                 Event::End => self.close_frame(),
+                Event::Ref(r) => self.reference(r, &lines),
+                Event::Divider(_) => self.divider(&lines, index),
             }
         }
 
@@ -845,6 +856,124 @@ impl<'a> Layout<'a> {
         self.grow(rect);
         self.touch(rect.x, rect.right());
         self.cursor = bottom + 8.0;
+        self.last_message = None;
+    }
+
+    // ---- references and dividers ------------------------------------
+
+    /// The leftmost and rightmost columns a `ref` spans.
+    fn ref_span(&self, r: &Ref) -> (usize, usize) {
+        let last = self.seq.participants.len().saturating_sub(1);
+        let lo = r.participants.iter().copied().min().unwrap_or(0);
+        let hi = r.participants.iter().copied().max().unwrap_or(last);
+        (lo, hi)
+    }
+
+    /// The narrowest a `ref` frame can be: its tab on the left, its label
+    /// centred, clear of the tab on both sides.
+    fn ref_width(&self, lines: &[String]) -> f32 {
+        // As the SVG writer sizes the tab, for `ref`.
+        let tab = 14.0 + 3.0 * FONT_SIZE * 0.6;
+        2.0 * (tab + 6.0) + self.label_widest(lines)
+    }
+
+    /// A `ref` frame: the named lifelines' heads wide, a row of its own,
+    /// its label centred.
+    fn reference(&mut self, r: &Ref, lines: &[String]) {
+        if self.seq.participants.is_empty() {
+            return;
+        }
+        let (lo, hi) = self.ref_span(r);
+        let mut x0 = self.x[lo] - self.heads[lo].width / 2.0;
+        let mut x1 = self.x[hi] + self.heads[hi].width / 2.0;
+        let need = self.ref_width(lines);
+        if x1 - x0 < need {
+            let grow = (need - (x1 - x0)) / 2.0;
+            x0 -= grow;
+            x1 += grow;
+        }
+        let tab_h = FONT_SIZE * 1.4;
+        let text_h = self.text_height(lines).max(self.line_height);
+        let top = self.cursor + 4.0;
+        // The tab's height above and below the label keeps it centred
+        // and clear of the tab.
+        let rect = Rect::new(x0, top, x1 - x0, text_h + 2.0 * tab_h);
+        let kind = ContainerKind::Fragment {
+            operator: "ref".to_string(),
+            guards: Vec::new(),
+        };
+        let mut style = Style::for_container(&kind);
+        // An interaction use covers the lifelines it spans, except on a
+        // tinted panel, where an opaque fill would show as a patch.
+        let tinted = self.tinted(rect.x, rect.right());
+        if !tinted {
+            style.fill = Paint::Role(Role::Background);
+        }
+        self.fragments.push((
+            self.frames_opened,
+            Container {
+                rect,
+                kind,
+                label: Vec::new(),
+                style,
+            },
+        ));
+        self.frames_opened += 1;
+        let mut y = rect.center().y - self.text_height(lines) / 2.0;
+        for line in lines {
+            self.texts.push(Text {
+                pos: Point::new(
+                    rect.center().x,
+                    y + (self.line_height - FONT_SIZE) / 2.0 + FONT_SIZE * 0.8,
+                ),
+                anchor: Anchor::Middle,
+                line: TextLine::new(line.clone(), Font::Body),
+                paint: Paint::Role(Role::Text),
+                backed: false,
+            });
+            y += self.line_height;
+        }
+        self.grow(rect);
+        self.touch(rect.x, rect.right());
+        self.cursor = rect.bottom() + 8.0;
+        self.last_message = None;
+    }
+
+    /// A divider: a double rule across every participant, its label on
+    /// a pill in the middle.
+    fn divider(&mut self, lines: &[String], index: usize) {
+        let n = self.seq.participants.len();
+        if n == 0 {
+            return;
+        }
+        let x0 = self.x[0] - self.heads[0].width / 2.0;
+        let x1 = self.x[n - 1] + self.heads[n - 1].width / 2.0;
+        let pill_h = self.text_height(lines).max(self.line_height) + 8.0;
+        let top = self.cursor + 4.0;
+        let y = top + pill_h / 2.0;
+        for dy in [-1.5, 1.5] {
+            let mut e = Edge::new(vec![
+                Seg::Move(Point::new(x0, y + dy)),
+                Seg::Line(Point::new(x1, y + dy)),
+            ]);
+            e.end = Marker::None;
+            self.edges.push(e);
+        }
+        let mut rect = Rect::new(x0, y - 2.0, x1 - x0, 4.0);
+        if !lines.is_empty() {
+            let w = self.label_widest(lines) + 20.0;
+            let pill = Rect::centered(Point::new((x0 + x1) / 2.0, y), w, pill_h);
+            let mut node = Node::new(format!("divider#{index}"), Shape::Stadium, pill);
+            node.label = lines
+                .iter()
+                .map(|l| TextLine::new(l.clone(), Font::Body))
+                .collect();
+            self.nodes.push(node);
+            rect = rect.union(&pill);
+        }
+        self.grow(rect);
+        self.touch(rect.x, rect.right());
+        self.cursor = top + pill_h + 8.0;
         self.last_message = None;
     }
 
