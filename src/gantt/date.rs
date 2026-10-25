@@ -166,9 +166,14 @@ pub enum Token {
     Year2,
     /// `Y`: a signed year of any length.
     YearSigned,
+    /// `YYYYY` / `YYYYYY`: six digits, optionally signed, as moment's strict
+    /// parser wants them.
+    Year6,
     /// A field of `min..=max` digits: month, day, hour, minute, second.
     Field(Field, usize, usize),
     /// `S`, `SS`, `SSS`: tenths, hundredths or thousandths of a second.
+    /// `SSSS` to `SSSSSSSSS` take any number of digits, truncated to
+    /// milliseconds, as moment does.
     Fraction(usize),
     /// `MMM` (`Jan`) or `MMMM` (`January`), case-insensitive.
     MonthName {
@@ -176,8 +181,9 @@ pub enum Token {
     },
     /// `Do`: a day of the month with an English ordinal suffix, `1st`.
     Ordinal,
-    /// `d`, `dd`, `ddd`, `dddd`: a weekday, matched and then ignored, as
-    /// moment ignores it — the date fields decide the day.
+    /// `d`, `dd`, `ddd`, `dddd`: a weekday. Beside a calendar date it is
+    /// matched and then ignored, as moment ignores it — the date fields
+    /// decide the day; in a locale week date (`gggg`, `ww`) it is the day.
     Weekday(WeekdayStyle),
     /// `A` / `a`: `AM` or `PM`, turning `h`/`hh` into a 12-hour clock.
     Meridiem,
@@ -185,7 +191,47 @@ pub enum Token {
     Quarter,
     /// `Z` / `ZZ`: `+05:00`, `-0800` or `Z`; the time is moved to UTC.
     Offset,
+    /// `GG`/`gg` (two digits, pivoting like `YY`), `GGGG`/`gggg` (four) or
+    /// `GGGGG`/`ggggg` (six, optionally signed): a week-numbering year.
+    WeekYear(Week, usize),
+    /// `W`/`WW` or `w`/`ww`: a week of the week-numbering year.
+    WeekNumber(Week, usize, usize),
+    /// `E`: the ISO weekday, 1 (Monday) to 7; `e`: the locale weekday,
+    /// 0 (Sunday) to 6.
+    WeekdayNumber(Week),
+    /// `DDD` (1–3 digits) or `DDDD` (3): the day of the year, 1–366.
+    DayOfYear(usize, usize),
+    /// `k` / `kk`: the hour 1–24, where 24 is the midnight starting the same
+    /// day (moment maps it to 0, unlike `HH` 24:00).
+    Hour24(usize, usize),
+    /// `Hmm` / `hmm` (3–4 digits) or `Hmmss` / `hmmss` (5–6): a clock run
+    /// together, split from the right as moment splits it.
+    Clock {
+        seconds: bool,
+    },
     Literal(String),
+}
+
+/// Which week-numbering a week token counts in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Week {
+    /// ISO 8601 (`GGGG`, `WW`, `E`): weeks start on Monday and week 1 holds
+    /// 4 January.
+    Iso,
+    /// moment's default `en` locale (`gggg`, `ww`, `e`): `dow: 0, doy: 6`,
+    /// so weeks start on Sunday and week 1 holds 1 January.
+    Locale,
+}
+
+impl Week {
+    /// moment's `(dow, doy)`: the first day of the week (0 = Sunday) and
+    /// `7 + dow - doy`, the day of January week 1 must contain.
+    fn rules(self) -> (i64, i64) {
+        match self {
+            Week::Iso => (1, 4),
+            Week::Locale => (0, 6),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,12 +271,56 @@ impl Default for DateFormat {
     }
 }
 
-const SUPPORTED_TOKENS: &str = "YYYY, YY, Y, Q, MMMM, MMM, MM, M, DD, D, Do, dddd, ddd, dd, \
-     d, HH, H, hh, h, A, a, mm, m, ss, s, SSS, SS, S, ZZ, Z, X or x";
+const SUPPORTED_TOKENS: &str = "YYYYYY, YYYYY, YYYY, YY, Y, Q, MMMM, MMM, MM, M, DDDD, DDD, DD, \
+     D, Do, dddd, ddd, dd, d, e, E, ww, w, WW, W, gggg, gg, GGGG, GG, HH, H, hh, h, kk, k, A, a, \
+     mm, m, ss, s, S to SSSSSSSSS, ZZ, Z, the localized LT, LTS, L to LLLL and l to llll, \
+     X or x";
 
 /// Every letter a moment.js or dayjs format token is made of; the others are
 /// literal text.
 const TOKEN_LETTERS: &str = "AaDdEeGgHhkMmNnQSsWwXxYyZz";
+
+/// moment's `en` long date formats, which `L`, `LL`, `LT`… expand into
+/// before the format is read; the lowercase forms are moment's abbreviations.
+const LOCALIZED: [(&str, &str); 10] = [
+    ("LTS", "h:mm:ss A"),
+    ("LT", "h:mm A"),
+    ("LLLL", "dddd, MMMM D, YYYY h:mm A"),
+    ("LLL", "MMMM D, YYYY h:mm A"),
+    ("LL", "MMMM D, YYYY"),
+    ("L", "MM/DD/YYYY"),
+    ("llll", "ddd, MMM D, YYYY h:mm A"),
+    ("lll", "MMM D, YYYY h:mm A"),
+    ("ll", "MMM D, YYYY"),
+    ("l", "M/D/YYYY"),
+];
+
+/// `format` with its localized tokens expanded, leaving `[...]` literals and
+/// `\`-escaped characters alone.
+fn expand_localized(format: &str) -> String {
+    let mut out = String::new();
+    let mut rest = format;
+    while let Some(c) = rest.chars().next() {
+        if c == '[' {
+            let end = rest.find(']').map_or(rest.len(), |end| end + 1);
+            out.push_str(&rest[..end]);
+            rest = &rest[end..];
+        } else if c == '\\' {
+            let end = rest[1..].chars().next().map_or(1, |c| 1 + c.len_utf8());
+            out.push_str(&rest[..end]);
+            rest = &rest[end..];
+        } else if let Some((token, expansion)) =
+            LOCALIZED.iter().find(|(token, _)| rest.starts_with(token))
+        {
+            out.push_str(expansion);
+            rest = &rest[token.len()..];
+        } else {
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
+        }
+    }
+    out
+}
 
 impl DateFormat {
     /// Parse a format, naming the first token it does not support.
@@ -240,7 +330,7 @@ impl DateFormat {
             "x" => return Ok(DateFormat::UnixMillis),
             _ => {}
         }
-        let chars: Vec<char> = format.trim().chars().collect();
+        let chars: Vec<char> = expand_localized(format.trim()).chars().collect();
         let mut tokens = Vec::new();
         let mut i = 0;
         while i < chars.len() {
@@ -254,6 +344,14 @@ impl DateFormat {
                 i += end + 1;
                 continue;
             }
+            // moment's escape: `\` makes the next character literal.
+            if c == '\\' {
+                if let Some(&next) = chars.get(i + 1) {
+                    tokens.push(Token::Literal(next.to_string()));
+                }
+                i += 2;
+                continue;
+            }
             // Letters no moment or dayjs token uses, such as the `T` in
             // `YYYY-MM-DDTHH:mm`, stand for themselves, as they do in dayjs.
             if !c.is_ascii_alphabetic() || !TOKEN_LETTERS.contains(c) {
@@ -262,11 +360,29 @@ impl DateFormat {
                 continue;
             }
             let mut run = chars[i..].iter().take_while(|&&x| x == c).count();
+            let after = |n: usize| chars.get(i + n..).unwrap_or(&[]);
             if c == 'D' && run == 1 && chars.get(i + 1) == Some(&'o') {
                 run = 2;
+            } else if matches!(c, 'H' | 'h') && run == 1 && after(1).starts_with(&['m', 'm']) {
+                // moment's run-together clocks, `Hmm` and `Hmmss`.
+                run = if after(3).starts_with(&['s', 's']) {
+                    5
+                } else {
+                    3
+                };
+            } else if chars.get(i + run) == Some(&'o')
+                && matches!(c, 'M' | 'Q' | 'D' | 'd' | 'w' | 'W' | 'y')
+                && run == if c == 'D' { 3 } else { 1 }
+            {
+                let token: String = chars[i..=i + run].iter().collect();
+                return Err(format!(
+                    "dateFormat token `{token}` is not supported: moment only formats it \
+                     and cannot parse it (see DESIGN.md)"
+                ));
             }
             let token: String = chars[i..i + run].iter().collect();
             tokens.push(match token.as_str() {
+                "YYYYYY" | "YYYYY" => Token::Year6,
                 "YYYY" => Token::Year4,
                 "YY" => Token::Year2,
                 "Y" => Token::YearSigned,
@@ -275,6 +391,8 @@ impl DateFormat {
                 "MMM" => Token::MonthName { full: false },
                 "MM" => Token::Field(Field::Month, 2, 2),
                 "M" => Token::Field(Field::Month, 1, 2),
+                "DDDD" => Token::DayOfYear(3, 3),
+                "DDD" => Token::DayOfYear(1, 3),
                 "DD" => Token::Field(Field::Day, 2, 2),
                 "D" => Token::Field(Field::Day, 1, 2),
                 "Do" => Token::Ordinal,
@@ -282,19 +400,38 @@ impl DateFormat {
                 "ddd" => Token::Weekday(WeekdayStyle::Short),
                 "dd" => Token::Weekday(WeekdayStyle::Min),
                 "d" => Token::Weekday(WeekdayStyle::Number),
+                "E" => Token::WeekdayNumber(Week::Iso),
+                "e" => Token::WeekdayNumber(Week::Locale),
+                "WW" => Token::WeekNumber(Week::Iso, 2, 2),
+                "W" => Token::WeekNumber(Week::Iso, 1, 2),
+                "ww" => Token::WeekNumber(Week::Locale, 2, 2),
+                "w" => Token::WeekNumber(Week::Locale, 1, 2),
+                "GGGGG" => Token::WeekYear(Week::Iso, 6),
+                "GGGG" => Token::WeekYear(Week::Iso, 4),
+                "GG" => Token::WeekYear(Week::Iso, 2),
+                "ggggg" => Token::WeekYear(Week::Locale, 6),
+                "gggg" => Token::WeekYear(Week::Locale, 4),
+                "gg" => Token::WeekYear(Week::Locale, 2),
                 // `h` is the 12-hour clock; a meridiem token, if any, moves
                 // it into the afternoon.
                 "HH" | "hh" => Token::Field(Field::Hour, 2, 2),
                 "H" | "h" => Token::Field(Field::Hour, 1, 2),
+                "kk" => Token::Hour24(2, 2),
+                "k" => Token::Hour24(1, 2),
+                "Hmm" | "hmm" => Token::Clock { seconds: false },
+                "Hmmss" | "hmmss" => Token::Clock { seconds: true },
                 "A" | "a" => Token::Meridiem,
                 "mm" => Token::Field(Field::Minute, 2, 2),
                 "m" => Token::Field(Field::Minute, 1, 2),
                 "ss" => Token::Field(Field::Second, 2, 2),
                 "s" => Token::Field(Field::Second, 1, 2),
-                "SSS" => Token::Fraction(3),
-                "SS" => Token::Fraction(2),
-                "S" => Token::Fraction(1),
                 "ZZ" | "Z" => Token::Offset,
+                s if c == 'S' && run <= 9 => Token::Fraction(s.len()),
+                s if c == 'N' && run <= 5 || c == 'y' && run <= 4 => {
+                    return Err(format!(
+                        "dateFormat era token `{s}` is not supported (see DESIGN.md)"
+                    ));
+                }
                 other => {
                     return Err(format!(
                         "dateFormat token `{other}` is not supported; use {SUPPORTED_TOKENS} \
@@ -304,6 +441,7 @@ impl DateFormat {
             });
             i += run;
         }
+        check_fields(&tokens)?;
         Ok(DateFormat::Tokens(tokens))
     }
 
@@ -326,6 +464,12 @@ impl DateFormat {
         };
         let mut afternoon = None;
         let mut offset_minutes = 0i64;
+        let mut week_year = None;
+        let mut week_number = None;
+        let mut weekday_number = None;
+        // `d`…`dddd`, 0 (Sunday) to 6.
+        let mut weekday = None;
+        let mut day_of_year = None;
         let mut rest = text;
         for token in tokens {
             rest = match token {
@@ -337,18 +481,66 @@ impl DateFormat {
                 }
                 Token::Year2 => {
                     let (value, tail) = digits(rest, 2, 2)?;
-                    // moment's pivot: 68 and below are 20xx.
-                    civil.year = if value <= 68 { 2000 } else { 1900 } + value as i64;
+                    civil.year = two_digit_year(value);
                     tail
                 }
                 Token::YearSigned => {
-                    let (sign, body) = match rest.as_bytes().first() {
-                        Some(b'-') => (-1, &rest[1..]),
-                        Some(b'+') => (1, &rest[1..]),
-                        _ => (1, rest),
-                    };
+                    let (sign, body) = sign(rest);
                     let (value, tail) = digits(body, 1, 6)?;
                     civil.year = sign * value as i64;
+                    tail
+                }
+                Token::Year6 => {
+                    let (sign, body) = sign(rest);
+                    let (value, tail) = digits(body, 6, 6)?;
+                    civil.year = sign * value as i64;
+                    tail
+                }
+                Token::WeekYear(_, width) => {
+                    let (year, tail) = match width {
+                        2 => digits(rest, 2, 2).map(|(v, tail)| (two_digit_year(v), tail))?,
+                        4 => digits(rest, 4, 4).map(|(v, tail)| (v as i64, tail))?,
+                        _ => {
+                            let (sign, body) = sign(rest);
+                            digits(body, 6, 6).map(|(v, tail)| (sign * v as i64, tail))?
+                        }
+                    };
+                    week_year = Some(year);
+                    tail
+                }
+                Token::WeekNumber(_, min, max) => {
+                    let (value, tail) = digits(rest, *min, *max)?;
+                    week_number = Some(value as i64);
+                    tail
+                }
+                Token::WeekdayNumber(_) => {
+                    let (value, tail) = digits(rest, 1, 2)?;
+                    weekday_number = Some(value as i64);
+                    tail
+                }
+                Token::DayOfYear(min, max) => {
+                    let (value, tail) = digits(rest, *min, *max)?;
+                    day_of_year = Some(value as i64);
+                    tail
+                }
+                Token::Hour24(min, max) => {
+                    let (value, tail) = digits(rest, *min, *max)?;
+                    civil.hour = if value == 24 { 0 } else { value };
+                    tail
+                }
+                Token::Clock { seconds } => {
+                    let (min, max) = if *seconds { (5, 6) } else { (3, 4) };
+                    let count = leading_digits(rest, max);
+                    if count < min {
+                        return None;
+                    }
+                    let (clock, tail) = rest.split_at(count);
+                    let hours = count - if *seconds { 4 } else { 2 };
+                    civil.hour = clock[..hours].parse().ok()?;
+                    civil.minute = clock[hours..hours + 2].parse().ok()?;
+                    if *seconds {
+                        civil.second = clock[hours + 2..].parse().ok()?;
+                    }
                     tail
                 }
                 Token::Quarter => {
@@ -359,10 +551,19 @@ impl DateFormat {
                     civil.month = (value - 1) * 3 + 1;
                     tail
                 }
-                Token::Fraction(width) => {
+                Token::Fraction(width) if *width <= 3 => {
                     let (value, tail) = digits(rest, *width, *width)?;
                     civil.millis = value * 10u32.pow(3 - *width as u32);
                     tail
+                }
+                Token::Fraction(_) => {
+                    let count = leading_digits(rest, usize::MAX);
+                    if count == 0 {
+                        return None;
+                    }
+                    let head: String = rest[..count.min(3)].chars().chain("00".chars()).collect();
+                    civil.millis = head[..3].parse().ok()?;
+                    &rest[count..]
                 }
                 Token::MonthName { full } => {
                     let (month, tail) = MONTHS.iter().zip(1..).find_map(|(name, month)| {
@@ -381,6 +582,7 @@ impl DateFormat {
                 }
                 Token::Weekday(WeekdayStyle::Number) => {
                     let (value, tail) = digits(rest, 1, 1)?;
+                    weekday = Some(value as i64);
                     (value <= 6).then_some(tail)?
                 }
                 Token::Weekday(style) => {
@@ -389,9 +591,11 @@ impl DateFormat {
                         WeekdayStyle::Short => 3,
                         _ => usize::MAX,
                     };
-                    WEEKDAYS
-                        .iter()
-                        .find_map(|name| strip_word(rest, &name[..len.min(name.len())]))?
+                    let (day, tail) = WEEKDAYS.iter().zip(1..).find_map(|(name, iso)| {
+                        strip_word(rest, &name[..len.min(name.len())]).map(|tail| (iso, tail))
+                    })?;
+                    weekday = Some(day % 7);
+                    tail
                 }
                 Token::Meridiem => match strip_word(rest, "am") {
                     Some(tail) => {
@@ -439,6 +643,44 @@ impl DateFormat {
             Some(false) if civil.hour == 12 => civil.hour = 0,
             _ => {}
         }
+        // A week date or an ordinal date names the day instead of the month
+        // and day fields; `check_fields` has ruled out formats with both.
+        let day = if let Some(system) = week_system(tokens) {
+            // A `YYYY` stands in for the week-year, as in moment.
+            let year = week_year.unwrap_or(civil.year);
+            let weekday = match system {
+                // moment's defaults: week 1, Monday.
+                Week::Iso => weekday_number.unwrap_or(1),
+                // `check_fields` requires a `w`; `d` and `e` count from
+                // Sunday, and the week's first day is the default.
+                Week::Locale => match (weekday, weekday_number) {
+                    (Some(d), _) => d,
+                    (None, Some(e)) if e <= 6 => e,
+                    (None, Some(_)) => return None,
+                    (None, None) => 0,
+                },
+            };
+            if system == Week::Iso && !(1..=7).contains(&weekday) {
+                return None;
+            }
+            Some(day_of_week_date(
+                year,
+                week_number.unwrap_or(1),
+                weekday,
+                system,
+            )?)
+        } else if let Some(ordinal) = day_of_year {
+            let length = if is_leap(civil.year) { 366 } else { 365 };
+            if !(1..=length).contains(&ordinal) {
+                return None;
+            }
+            Some(days_from_civil(civil.year, 1, 1) + ordinal - 1)
+        } else {
+            None
+        };
+        if let Some(day) = day {
+            (civil.year, civil.month, civil.day) = civil_from_days(day);
+        }
         let valid = rest.is_empty()
             && (1..=12).contains(&civil.month)
             && civil.day >= 1
@@ -448,6 +690,117 @@ impl DateFormat {
             && civil.second < 60;
         valid.then(|| civil.to_ms() - offset_minutes * MINUTE)
     }
+}
+
+/// moment's two-digit-year pivot: 68 and below are 20xx.
+fn two_digit_year(value: u32) -> i64 {
+    (if value <= 68 { 2000 } else { 1900 }) + value as i64
+}
+
+/// A leading `+` or `-`, as a sign and the text after it.
+fn sign(text: &str) -> (i64, &str) {
+    match text.as_bytes().first() {
+        Some(b'-') => (-1, &text[1..]),
+        Some(b'+') => (1, &text[1..]),
+        _ => (1, text),
+    }
+}
+
+/// The week system a format's week tokens count in, if it has any.
+fn week_system(tokens: &[Token]) -> Option<Week> {
+    tokens.iter().find_map(|token| match token {
+        Token::WeekYear(week, _) | Token::WeekNumber(week, ..) | Token::WeekdayNumber(week) => {
+            Some(*week)
+        }
+        _ => None,
+    })
+}
+
+/// Refuse formats whose fields contradict each other. moment resolves them
+/// by silent precedence — month and day beat a week, a day of the year
+/// beats the month and day — which would drop part of what was written.
+fn check_fields(tokens: &[Token]) -> Result<(), String> {
+    let has = |test: &dyn Fn(&Token) -> bool| tokens.iter().any(test);
+    let in_week = |system: Week| {
+        has(&|t| {
+            matches!(t, Token::WeekYear(w, _) | Token::WeekNumber(w, ..) | Token::WeekdayNumber(w)
+                if *w == system)
+        })
+    };
+    let (iso, locale) = (in_week(Week::Iso), in_week(Week::Locale));
+    let calendar = has(&|t| {
+        matches!(
+            t,
+            Token::Field(Field::Month | Field::Day, ..)
+                | Token::MonthName { .. }
+                | Token::Ordinal
+                | Token::Quarter
+        )
+    });
+    let ordinal = has(&|t| matches!(t, Token::DayOfYear(..)));
+    let year = has(&|t| {
+        matches!(
+            t,
+            Token::Year4 | Token::Year2 | Token::YearSigned | Token::Year6
+        )
+    });
+    let week_year = has(&|t| matches!(t, Token::WeekYear(..)));
+    let weekday = has(&|t| matches!(t, Token::Weekday(_)));
+    let locale_week = has(&|t| matches!(t, Token::WeekNumber(Week::Locale, ..)));
+    let locale_weekday = has(&|t| matches!(t, Token::WeekdayNumber(Week::Locale)));
+    let problem = if iso && locale {
+        "mixes ISO week tokens (`GGGG`, `WW`, `E`) with locale week tokens (`gggg`, `ww`, `e`)"
+    } else if (iso || locale) && calendar {
+        "mixes week tokens with month or day-of-month tokens; write a week date or a calendar date"
+    } else if ordinal && (calendar || iso || locale) {
+        "mixes a day of the year (`DDD`, `DDDD`) with month, day or week tokens"
+    } else if week_year && year {
+        "has both a calendar year (`YYYY`) and a week-year (`GGGG`, `gggg`)"
+    } else if iso && weekday {
+        "mixes ISO week tokens with a `d`…`dddd` weekday, which moment ignores there; \
+         use `E` for the ISO weekday"
+    } else if locale && weekday && locale_weekday {
+        "names the weekday twice, with `d`…`dddd` and with `e`"
+    } else if locale && !locale_week {
+        "has a locale week-year or weekday (`gggg`, `e`) but no week (`w`, `ww`); \
+         moment would take the week from today"
+    } else {
+        return Ok(());
+    };
+    Err(format!("dateFormat {problem} (see DESIGN.md)"))
+}
+
+/// The day of week-numbering year `year`, week `week` and `weekday`, as
+/// moment's `dayOfYearFromWeeks` computes it, or `None` past the year's last
+/// week. `weekday` is 1–7 from Monday for ISO, 0–6 from Sunday for the
+/// locale.
+fn day_of_week_date(year: i64, week: i64, weekday: i64, system: Week) -> Option<i64> {
+    let (dow, _) = system.rules();
+    if week < 1 || week > weeks_in_year(year, system) {
+        return None;
+    }
+    let local_weekday = (7 + weekday - dow) % 7;
+    Some(
+        days_from_civil(year, 1, 1)
+            + 7 * (week - 1)
+            + local_weekday
+            + first_week_offset(year, system),
+    )
+}
+
+/// Days from 1 January to the first day of week 1 (zero or negative).
+fn first_week_offset(year: i64, system: Week) -> i64 {
+    let (dow, doy) = system.rules();
+    // The day of January that week 1 must contain.
+    let anchor = 7 + dow - doy;
+    let anchor_weekday = iso_weekday(days_from_civil(year, 1, anchor as u32)) as i64 % 7;
+    -((7 + anchor_weekday - dow) % 7) + anchor - 1
+}
+
+/// The number of weeks, 52 or 53, in week-numbering year `year`.
+pub fn weeks_in_year(year: i64, system: Week) -> i64 {
+    let length = if is_leap(year) { 366 } else { 365 };
+    (length - first_week_offset(year, system) + first_week_offset(year + 1, system)) / 7
 }
 
 /// `text` without a leading `word`, compared ASCII case-insensitively.
@@ -464,13 +817,17 @@ fn parse_int(text: &str) -> Option<i64> {
     text.parse().ok()
 }
 
-/// Between `min` and `max` leading ASCII digits.
-fn digits(text: &str, min: usize, max: usize) -> Option<(u32, &str)> {
-    let count = text
-        .bytes()
+/// How many ASCII digits, up to `max`, `text` starts with.
+fn leading_digits(text: &str, max: usize) -> usize {
+    text.bytes()
         .take(max)
         .take_while(u8::is_ascii_digit)
-        .count();
+        .count()
+}
+
+/// Between `min` and `max` leading ASCII digits.
+fn digits(text: &str, min: usize, max: usize) -> Option<(u32, &str)> {
+    let count = leading_digits(text, max);
     if count < min {
         return None;
     }
@@ -741,8 +1098,8 @@ mod tests {
             DateFormat::parse("X").unwrap().parse_date("86400"),
             Some(DAY)
         );
-        let error = DateFormat::parse("YYYY-DDDD").unwrap_err();
-        assert!(error.contains("`DDDD`"), "{error}");
+        let error = DateFormat::parse("YYYY-DDDDD").unwrap_err();
+        assert!(error.contains("`DDDDD`"), "{error}");
     }
 
     #[test]
@@ -883,7 +1240,154 @@ mod tests {
             DateFormat::parse("Y-MM").unwrap().parse_date("-44-03"),
             Some(ymd(-44, 3, 1))
         );
-        let error = DateFormat::parse("YYYY-ww").unwrap_err();
-        assert!(error.contains("`ww`"), "{error}");
+        let error = DateFormat::parse("YYYY-Wo").unwrap_err();
+        assert!(error.contains("`Wo`"), "{error}");
+    }
+
+    fn on(format: &str, text: &str) -> Option<i64> {
+        DateFormat::parse(format).unwrap().parse_date(text)
+    }
+
+    #[test]
+    fn iso_week_dates_resolve() {
+        let iso = "GGGG-[W]WW-E";
+        // Week 53 of 2020 runs into 2021.
+        assert_eq!(on(iso, "2020-W53-5"), Some(ymd(2021, 1, 1)));
+        // Week 1 of 2026 starts in 2025.
+        assert_eq!(on(iso, "2026-W01-1"), Some(ymd(2025, 12, 29)));
+        assert_eq!(on(iso, "2024-W01-1"), Some(ymd(2024, 1, 1)));
+        assert_eq!(on(iso, "2026-W02-1"), Some(ymd(2026, 1, 5)));
+        assert_eq!(on(iso, "2025-W53-1"), None); // 2025 has 52 weeks
+        assert_eq!(on(iso, "2026-W00-1"), None);
+        assert_eq!(on(iso, "2026-W02-8"), None);
+        assert_eq!(on(iso, "2026-W02-0"), None);
+        // moment's defaults: week 1, Monday; `YYYY` stands in for the week-year.
+        assert_eq!(on("GGGG", "2026"), Some(ymd(2025, 12, 29)));
+        assert_eq!(on("YYYY [W]W", "2026 W2"), Some(ymd(2026, 1, 5)));
+        assert_eq!(on("GG-WW-E", "26-02-3"), Some(ymd(2026, 1, 7)));
+        assert_eq!(
+            on("GGGG-[W]WW-E HH:mm", "2026-W02-1 09:30"),
+            Some(ymd(2026, 1, 5) + 9 * HOUR + 30 * MINUTE)
+        );
+        // Every day of a few years round-trips through `iso_week`.
+        let from = days_from_civil(2018, 12, 1);
+        for days in from..from + 3 * 366 {
+            let (year, week) = iso_week(days);
+            let text = format!("{year}-W{week:02}-{}", iso_weekday(days));
+            assert_eq!(on(iso, &text), Some(days * DAY), "{text}");
+        }
+    }
+
+    #[test]
+    fn locale_week_dates_follow_moment_en() {
+        // en: weeks start on Sunday and week 1 holds 1 January.
+        let en = "gggg-[w]ww-e";
+        // 1 January 2026 is a Thursday: week 1 starts Sunday 28 December.
+        assert_eq!(on(en, "2026-w01-0"), Some(ymd(2025, 12, 28)));
+        assert_eq!(on(en, "2026-w01-4"), Some(ymd(2026, 1, 1)));
+        assert_eq!(on(en, "2026-w02-1"), Some(ymd(2026, 1, 5)));
+        assert_eq!(on(en, "2026-w01-7"), None);
+        assert_eq!(
+            on("gggg [w]w dddd", "2026 w2 Friday"),
+            Some(ymd(2026, 1, 9))
+        );
+        assert_eq!(on("gggg [w]w d", "2026 w2 0"), Some(ymd(2026, 1, 4)));
+        // No weekday: the week's first day, Sunday.
+        assert_eq!(on("gggg-ww", "2026-02"), Some(ymd(2026, 1, 4)));
+        // Every day round-trips: a week belongs to the year of its Saturday.
+        let from = days_from_civil(2019, 12, 1);
+        for days in from..from + 3 * 366 {
+            let sunday = days - iso_weekday(days) as i64 % 7;
+            let (year, _, _) = civil_from_days(sunday + 6);
+            let week = (sunday + 6 - days_from_civil(year, 1, 1)) / 7 + 1;
+            let text = format!("{year}-w{week:02}-{}", days - sunday);
+            assert_eq!(on(en, &text), Some(days * DAY), "{text}");
+        }
+        assert_eq!(weeks_in_year(2022, Week::Locale), 53);
+        assert_eq!(weeks_in_year(2016, Week::Locale), 53);
+        assert_eq!(weeks_in_year(2026, Week::Locale), 52);
+        assert_eq!(weeks_in_year(2026, Week::Iso), 53);
+        assert_eq!(weeks_in_year(2025, Week::Locale), 52);
+    }
+
+    #[test]
+    fn days_of_the_year_resolve() {
+        assert_eq!(on("YYYY-DDDD", "2024-366"), Some(ymd(2024, 12, 31)));
+        assert_eq!(on("YYYY-DDDD", "2025-366"), None);
+        assert_eq!(on("YYYY-DDDD", "2025-000"), None);
+        assert_eq!(on("YYYY-DDDD", "2025-60"), None);
+        assert_eq!(on("YYYY-DDDD", "2024-060"), Some(ymd(2024, 2, 29)));
+        assert_eq!(on("YYYY-DDD", "2025-60"), Some(ymd(2025, 3, 1)));
+        assert_eq!(on("YYYY-DDD", "2025-1"), Some(ymd(2025, 1, 1)));
+    }
+
+    #[test]
+    fn hours_and_clocks_parse_like_moment() {
+        let day = ymd(2026, 3, 1);
+        // moment maps `k` 24 to hour 0 of the same day, not the next.
+        assert_eq!(on("YYYY-MM-DD kk:mm", "2026-03-01 24:00"), Some(day));
+        assert_eq!(
+            on("YYYY-MM-DD k:mm", "2026-03-01 9:15"),
+            Some(day + 9 * HOUR + 15 * MINUTE)
+        );
+        assert_eq!(on("YYYY-MM-DD k:mm", "2026-03-01 25:00"), None);
+        assert_eq!(on("Hmm", "930"), Some(9 * HOUR + 30 * MINUTE));
+        assert_eq!(on("Hmm", "1745"), Some(17 * HOUR + 45 * MINUTE));
+        assert_eq!(
+            on("Hmmss", "174501"),
+            Some(17 * HOUR + 45 * MINUTE + SECOND)
+        );
+        assert_eq!(on("HH:mm:ss.SSSSSS", "00:00:01.123456"), Some(SECOND + 123));
+        assert_eq!(on("HH:mm:ss.SSSS", "00:00:01.5"), Some(SECOND + 500));
+        assert_eq!(on("YYYYYY-MM-DD", "+002026-03-01"), Some(day));
+        assert_eq!(on("YYYYY-MM-DD", "2026-03-01"), None);
+    }
+
+    #[test]
+    fn localized_formats_expand_to_moment_en() {
+        assert_eq!(on("L", "03/01/2026"), Some(ymd(2026, 3, 1)));
+        assert_eq!(on("l", "3/1/2026"), Some(ymd(2026, 3, 1)));
+        assert_eq!(on("LL", "March 1, 2026"), Some(ymd(2026, 3, 1)));
+        assert_eq!(
+            on("lll", "Mar 1, 2026 5:30 PM"),
+            Some(ymd(2026, 3, 1) + 17 * HOUR + 30 * MINUTE)
+        );
+        assert_eq!(
+            on("LLLL", "Sunday, March 1, 2026 9:00 AM"),
+            Some(ymd(2026, 3, 1) + 9 * HOUR)
+        );
+        assert_eq!(
+            on("LTS", "9:05:07 PM"),
+            Some(21 * HOUR + 5 * MINUTE + 7 * SECOND)
+        );
+        // Brackets and backslashes keep their letters literal.
+        assert_eq!(on("[L]YYYY", "L2026"), Some(ymd(2026, 1, 1)));
+        assert_eq!(on("\\WYYYY", "W2026"), Some(ymd(2026, 1, 1)));
+    }
+
+    #[test]
+    fn conflicting_and_unparseable_tokens_are_named() {
+        for (format, needle) in [
+            ("GGGG-ww", "mixes ISO week tokens"),
+            ("GGGG-WW-DD", "month or day-of-month"),
+            ("YYYY-MM-DDDD", "day of the year"),
+            ("YYYY GGGG-WW", "both a calendar year"),
+            ("GGGG-WW dddd", "use `E`"),
+            ("gggg-ww d e", "weekday twice"),
+            ("gggg e", "no week"),
+            ("YYYY-Mo", "`Mo`"),
+            ("YYYY-DDDo", "`DDDo`"),
+            ("YYYY-[W]wo", "`wo`"),
+            ("YYYY do", "`do`"),
+            ("YYYY Qo", "`Qo`"),
+            ("YYYY N", "era token `N`"),
+            ("yyyy", "era token `yyyy`"),
+            ("YYYY G", "`G`"),
+            ("HH:mm z", "`z`"),
+            ("SSSSSSSSSS", "`SSSSSSSSSS`"),
+        ] {
+            let error = DateFormat::parse(format).unwrap_err();
+            assert!(error.contains(needle), "{format}: {error}");
+        }
     }
 }
