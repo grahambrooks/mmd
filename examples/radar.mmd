@@ -1,0 +1,14 @@
+%% showcase: radar-beta with three curves
+%% prose: One axis per quality, clockwise from twelve o'clock, over a circular graticule of five rings. Each curve is a smooth closed line through its values, lightly filled so the curves beneath show through, with a legend naming them. The third curve names its axes, across several lines.
+%% approx: Curve areas are filled with sparse strokes rather than a half-transparent fill.
+radar-beta
+    title Renderer coverage by quality
+    axis text["Real text"], fonts["Fonts"], layout["Layout"], colour["Colour"], speed["Speed"], size["Small output"]
+    curve mmd["mmd"]{5, 4, 3, 3, 5, 5}
+    curve cli["mermaid-cli"]{1, 3, 5, 5, 2, 2}
+    curve hand["Hand drawn"]{
+        text: 4, fonts: 2, layout: 2,
+        colour: 3, speed: 1, size: 4
+    }
+    max 5
+    ticks 5
