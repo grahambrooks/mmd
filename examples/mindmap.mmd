@@ -1,0 +1,27 @@
+%% showcase: mindmap of a release plan
+%% prose: The root sits in the middle and its branches share the two sides; each branch keeps one colour for its outlines and curves. Look for the node shapes — circle, square, rounded, cloud, bang, hexagon — and the markdown emphasis in one label.
+%% approx: Laid out as a two-sided tidy tree, not mermaid's force-directed (cose) spread.
+%% approx: Branch colours outline nodes rather than filling them.
+%% approx: Default (unbracketed) nodes are drawn rounded, not as text over an underline.
+%% approx: `))bang((` is drawn as a heavy ellipse; `::icon(…)` and `:::class` are accepted but not drawn.
+mindmap
+  root((Release 2.0))
+    Scope
+      Features
+        Search
+        ["`**Bulk** export`"]
+      [Bug fixes]
+    Schedule
+      (Beta in May)
+      (GA in June)
+    Risks
+      ))Late API((
+      )Staffing(
+        ::icon(fa fa-users)
+    Comms
+      {{Blog post}}
+      Changelog
+      :::muted
+    Ops
+      Runbooks
+      On-call rota

@@ -12,13 +12,20 @@
 //! See `DESIGN.md` for the supported syntax; anything outside it is a parse
 //! error carrying a line number, never a silent omission.
 
+pub mod block;
 pub mod c4;
 pub mod er;
 pub mod flowchart;
 pub mod gitgraph;
+pub mod ishikawa;
 mod layered;
+mod meta;
+pub mod mindmap;
+pub mod packet;
 mod style;
 pub mod text;
+pub mod treemap;
+pub mod treeview;
 
 use std::fmt;
 
@@ -45,6 +52,12 @@ pub enum Kind {
     C4Dynamic,
     /// Recognised so its error comes from the C4 parser; not yet supported.
     C4Deployment,
+    Mindmap,
+    Treemap,
+    Packet,
+    Block,
+    TreeView,
+    Ishikawa,
 }
 
 impl Kind {
@@ -59,6 +72,12 @@ impl Kind {
         Kind::C4Dynamic,
         Kind::C4Deployment,
         Kind::Er,
+        Kind::Mindmap,
+        Kind::Treemap,
+        Kind::Packet,
+        Kind::Block,
+        Kind::TreeView,
+        Kind::Ishikawa,
     ];
 
     /// The keyword that introduces this diagram.
@@ -72,6 +91,12 @@ impl Kind {
             Kind::C4Component => "C4Component",
             Kind::C4Dynamic => "C4Dynamic",
             Kind::C4Deployment => "C4Deployment",
+            Kind::Mindmap => "mindmap",
+            Kind::Treemap => "treemap",
+            Kind::Packet => "packet",
+            Kind::Block => "block",
+            Kind::TreeView => "treeView-beta",
+            Kind::Ishikawa => "ishikawa",
         }
     }
 
@@ -80,6 +105,10 @@ impl Kind {
         match self {
             // `graph` is the older name for a flowchart.
             Kind::Flowchart => &["graph"],
+            Kind::Treemap => &["treemap-beta"],
+            Kind::Packet => &["packet-beta"],
+            Kind::Block => &["block-beta"],
+            Kind::Ishikawa => &["ishikawa-beta"],
             _ => &[],
         }
     }
@@ -175,6 +204,12 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         Some(Kind::Er) => er::scene(source, measure),
+        Some(Kind::Mindmap) => mindmap::scene(source, measure),
+        Some(Kind::Treemap) => treemap::scene(source, measure),
+        Some(Kind::Packet) => packet::scene(source, measure),
+        Some(Kind::Block) => block::scene(source, measure),
+        Some(Kind::TreeView) => treeview::scene(source, measure),
+        Some(Kind::Ishikawa) => ishikawa::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {
