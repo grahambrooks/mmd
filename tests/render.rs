@@ -3,6 +3,8 @@
 //! Layout properties are asserted on the scene rather than on SVG strings, so
 //! these survive cosmetic changes to the output.
 
+use std::path::Path;
+
 use mmd::Scene;
 use mmd::geom::Rect;
 
@@ -24,7 +26,7 @@ fn rects(scene: &Scene) -> Vec<Rect> {
 
 /// Everything the scene draws: nodes, containers and the points of every
 /// edge's path.
-fn drawn(scene: &Scene) -> Rect {
+fn drawn(scene: &Scene) -> Option<Rect> {
     let mut all: Vec<Rect> = scene.nodes.iter().map(|n| n.rect).collect();
     all.extend(scene.containers.iter().map(|c| c.rect));
     for edge in &scene.edges {
@@ -32,31 +34,102 @@ fn drawn(scene: &Scene) -> Rect {
             all.extend(poly.points.iter().map(|p| Rect::new(p.x, p.y, 0.0, 0.0)));
         }
     }
-    all.into_iter()
-        .reduce(|a, b| a.union(&b))
-        .expect("scene draws something")
+    all.into_iter().reduce(|a, b| a.union(&b))
+}
+
+/// Every `examples/*.mmd`, by path, so a new sample is checked without
+/// being listed here.
+fn examples() -> Vec<(String, String)> {
+    sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("examples"))
+}
+
+/// Every `examples/gaps/*.mmd`: real mermaid input mmd does not handle yet.
+fn gaps() -> Vec<(String, String)> {
+    sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/gaps"))
+}
+
+fn sources(dir: &Path) -> Vec<(String, String)> {
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "mmd"))
+                .collect()
+        })
+        .unwrap_or_default();
+    paths.sort();
+    paths
+        .into_iter()
+        .map(|p| {
+            let source = std::fs::read_to_string(&p).expect("sample is readable");
+            (p.display().to_string(), source)
+        })
+        .collect()
 }
 
 #[test]
-fn both_samples_render_to_svg() {
-    for source in [GITGRAPH, GITGRAPH_TB, C4, C4_CONTAINER, FLOWCHART, ER] {
-        let svg = mmd::render(source).expect("sample renders");
-        assert!(svg.starts_with("<svg"), "{}", &svg[..40.min(svg.len())]);
-        assert!(svg.trim_end().ends_with("</svg>"));
+fn every_example_renders_to_svg() {
+    let examples = examples();
+    assert!(examples.len() >= 6, "examples/ went missing");
+    for (path, source) in examples {
+        let svg = mmd::render(&source).unwrap_or_else(|e| panic!("{path}: {e}"));
+        assert!(svg.starts_with("<svg"), "{path}");
+        assert!(svg.trim_end().ends_with("</svg>"), "{path}");
     }
 }
 
 #[test]
 fn output_is_never_html_in_disguise() {
-    for source in [GITGRAPH, GITGRAPH_TB, C4, C4_CONTAINER, FLOWCHART, ER] {
-        let svg = mmd::render(source).unwrap();
+    for (path, source) in examples() {
+        let svg = mmd::render(&source).unwrap();
         // The whole point of the crate: SVG-only consumers must keep the text.
-        assert!(!svg.contains("foreignObject"), "labels must be SVG text");
+        assert!(
+            !svg.contains("foreignObject"),
+            "{path}: labels must be SVG text"
+        );
         assert!(
             !svg.contains("<style"),
-            "styling must be presentation attributes"
+            "{path}: styling must be presentation attributes"
         );
-        assert!(svg.contains("<text"));
+        assert!(svg.contains("<text"), "{path}: no text");
+    }
+}
+
+#[test]
+fn everything_drawn_stays_inside_the_reported_bounds() {
+    for (path, source) in examples() {
+        let scene = mmd::scene(&source, &fonts()).unwrap();
+        let bounds = scene.bounds();
+        if let Some(drawn) = drawn(&scene) {
+            assert!(
+                bounds.encloses(&drawn, 0.01),
+                "{path}: {drawn:?} escapes {bounds:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn rendering_is_deterministic() {
+    for (path, source) in examples() {
+        assert_eq!(
+            mmd::render(&source).unwrap(),
+            mmd::render(&source).unwrap(),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn every_known_gap_fails_loudly_with_a_line_number() {
+    for (path, source) in gaps() {
+        match mmd::render(&source) {
+            Ok(_) => panic!("{path} renders now: move it out of examples/gaps/"),
+            Err(error) => {
+                assert!(error.line >= 1, "{path}: {error}");
+                assert!(!error.message.is_empty(), "{path}");
+            }
+        }
     }
 }
 
@@ -149,42 +222,6 @@ fn c4_element_boxes_never_overlap_each_other() {
             assert!(!a.intersects(b), "{a:?} overlaps {b:?}");
         }
     }
-}
-
-#[test]
-fn everything_drawn_stays_inside_the_reported_bounds() {
-    for scene in [
-        mmd::gitgraph::scene(GITGRAPH, &fonts()).unwrap(),
-        mmd::gitgraph::scene(GITGRAPH_TB, &fonts()).unwrap(),
-        mmd::c4::scene(C4, &fonts()).unwrap(),
-        mmd::flowchart::scene(FLOWCHART, &fonts()).unwrap(),
-        mmd::er::scene(ER, &fonts()).unwrap(),
-        mmd::c4::scene(C4_CONTAINER, &fonts()).unwrap(),
-    ] {
-        let bounds = scene.bounds();
-        let drawn = drawn(&scene);
-        assert!(
-            bounds.encloses(&drawn, 0.01),
-            "{drawn:?} escapes {bounds:?}"
-        );
-    }
-}
-
-#[test]
-fn rendering_is_deterministic() {
-    assert_eq!(
-        mmd::render(GITGRAPH).unwrap(),
-        mmd::render(GITGRAPH).unwrap()
-    );
-    assert_eq!(
-        mmd::render(GITGRAPH_TB).unwrap(),
-        mmd::render(GITGRAPH_TB).unwrap()
-    );
-    assert_eq!(mmd::render(C4).unwrap(), mmd::render(C4).unwrap());
-    assert_eq!(
-        mmd::render(C4_CONTAINER).unwrap(),
-        mmd::render(C4_CONTAINER).unwrap()
-    );
 }
 
 #[test]

@@ -48,6 +48,19 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Every kind, in the order `detect()` tries them. Adding a diagram type
+    /// adds its variant here, a `keyword`, and an arm in `scene()`.
+    pub const ALL: &[Kind] = &[
+        Kind::Flowchart,
+        Kind::GitGraph,
+        Kind::C4Context,
+        Kind::C4Container,
+        Kind::C4Component,
+        Kind::C4Dynamic,
+        Kind::C4Deployment,
+        Kind::Er,
+    ];
+
     /// The keyword that introduces this diagram.
     pub fn keyword(self) -> &'static str {
         match self {
@@ -60,6 +73,21 @@ impl Kind {
             Kind::C4Dynamic => "C4Dynamic",
             Kind::C4Deployment => "C4Deployment",
         }
+    }
+
+    /// Other keywords that introduce the same diagram.
+    pub fn aliases(self) -> &'static [&'static str] {
+        match self {
+            // `graph` is the older name for a flowchart.
+            Kind::Flowchart => &["graph"],
+            _ => &[],
+        }
+    }
+
+    /// Whether this kind renders, rather than being recognised only so its
+    /// own parser can name what is missing.
+    pub fn is_supported(self) -> bool {
+        !matches!(self, Kind::C4Dynamic | Kind::C4Deployment)
     }
 }
 
@@ -93,36 +121,17 @@ impl std::error::Error for Error {}
 
 /// Identify the diagram type from its first meaningful line.
 pub fn detect(source: &str) -> Option<Kind> {
-    for line in source.lines() {
-        let line = strip_comment(line).trim();
-        if line.is_empty() {
-            continue;
-        }
-        // `graph` is the older name for a flowchart.
-        if line == "graph" || line.starts_with("graph ") {
-            return Some(Kind::Flowchart);
-        }
-        for kind in [
-            Kind::GitGraph,
-            Kind::C4Context,
-            Kind::C4Container,
-            Kind::C4Component,
-            Kind::C4Dynamic,
-            Kind::C4Deployment,
-            Kind::Flowchart,
-            Kind::Er,
-        ] {
-            let keyword = kind.keyword();
-            if line == keyword
-                || line.starts_with(&format!("{keyword} "))
-                || line.starts_with(&format!("{keyword}:"))
-            {
-                return Some(kind);
-            }
-        }
-        return None;
-    }
-    None
+    let line = source
+        .lines()
+        .map(|line| strip_comment(line).trim())
+        .find(|line| !line.is_empty())?;
+    let introduces = |keyword: &str| {
+        line.strip_prefix(keyword)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t', ':', ';']))
+    };
+    Kind::ALL.iter().copied().find(|kind| {
+        introduces(kind.keyword()) || kind.aliases().iter().any(|alias| introduces(alias))
+    })
 }
 
 /// Strip a `%%` comment from a line.
@@ -175,10 +184,17 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
                      diagram takes one (see DESIGN.md)",
                 ));
             }
+            let expected: Vec<String> = Kind::ALL
+                .iter()
+                .filter(|kind| kind.is_supported())
+                .map(|kind| format!("`{}`", kind.keyword()))
+                .collect();
             Err(Error::new(
                 line,
-                "unrecognised diagram: expected one of `flowchart`, `erDiagram`, `gitGraph`, \
-             `C4Context`, `C4Container`, `C4Component`",
+                format!(
+                    "unrecognised diagram: expected one of {}",
+                    expected.join(", ")
+                ),
             ))
         }
     }

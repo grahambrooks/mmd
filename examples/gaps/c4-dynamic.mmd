@@ -1,0 +1,7 @@
+%% showcase: C4Dynamic — numbered interactions
+%% prose: Dynamic diagrams number each relation in order (RelIndex). mmd recognises the header so the error names it.
+C4Dynamic
+    title Uploading a document
+    Container(api, "API", "Rust")
+    ContainerDb(db, "Store", "Postgres")
+    RelIndex(1, api, db, "Saves the upload")
