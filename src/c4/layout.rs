@@ -209,8 +209,11 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
             Arrows::Back => (Marker::Arrow, Marker::None),
             Arrows::Both => (Marker::Arrow, Marker::Arrow),
         };
-        edge.labels
-            .push(EdgeLabel::new(pos, lines, true, measure, FONT_SIZE));
+        let mut label = EdgeLabel::new(pos, lines, true, measure, FONT_SIZE);
+        if let Some((r, g, b)) = relation.style.text_color {
+            label.paint = Paint::Rgb(r, g, b);
+        }
+        edge.labels.push(label);
         scene.edges.push(edge);
     }
     separate_labels(&mut scene.edges);
@@ -795,5 +798,31 @@ mod tests {
         );
         assert_eq!(scene.containers.len(), 1);
         assert!(scene.bounds().encloses(&scene.containers[0].rect, 0.01));
+    }
+
+    #[test]
+    fn text_colours_paint_relation_labels() {
+        let scene = layout(
+            &parse(
+                "C4Context\n\
+                 AddRelTag(\"async\", $textColor=\"#2b6cb0\")\n\
+                 System(a, \"A\")\nSystem(b, \"B\")\nSystem(c, \"C\")\n\
+                 Rel(a, b, \"Calls\")\nRel(b, c, \"Queues\", $tags=\"async\")\nRel(a, c, \"Plain\")\n\
+                 UpdateRelStyle(a, b, $textColor=\"red\")\n",
+            )
+            .unwrap(),
+            &Fixed,
+        );
+        let paint = |text: &str| {
+            let edge = scene.edges.iter().find(|e| {
+                e.labels
+                    .iter()
+                    .any(|l| l.lines.iter().any(|l| l.plain() == text))
+            });
+            edge.unwrap().labels[0].paint
+        };
+        assert_eq!(paint("Calls"), Paint::Rgb(255, 0, 0));
+        assert_eq!(paint("Queues"), Paint::Rgb(0x2b, 0x6c, 0xb0));
+        assert_eq!(paint("Plain"), Paint::Role(Role::Muted));
     }
 }

@@ -2,8 +2,8 @@
 //! with every element placed at its own coordinates.
 
 use diagram_scene::{
-    Anchor, Container, ContainerKind, Dash, Edge, EdgeLabel, Font, Marker, Node, Paint, Pen, Point,
-    Rect, Role, Scene, Seg, Shape, Style, Text, TextLine, Weight,
+    Anchor, Container, ContainerKind, Dash, Edge, Font, Marker, Node, Paint, Pen, Point, Rect,
+    Role, Scene, Seg, Shape, Style, Text, TextLine, Weight,
 };
 
 use super::parse::{Flow, Kind, Strategy, Wardley};
@@ -101,13 +101,15 @@ pub fn layout(map: &Wardley, measure: &dyn Measure) -> Scene {
         TextLine::new("Evolution", Font::Bold),
         Paint::Role(Role::Text),
     );
-    text(
-        &mut scene,
-        Point::new(left, top + MARGIN - 10.0),
-        Anchor::Middle,
-        TextLine::new("Visibility", Font::Bold),
-        Paint::Role(Role::Text),
-    );
+    // Up the left margin, reading bottom to top, as mermaid draws it.
+    scene.texts.push(Text {
+        rotate: -90.0,
+        ..Text::new(
+            Point::new(left / 2.0 + 5.0, top + MARGIN + chart_h / 2.0),
+            Anchor::Middle,
+            TextLine::new("Visibility", Font::Bold),
+        )
+    });
 
     // Where each component is drawn; a pipeline's parent moves to the top
     // of its box, as mermaid does.
@@ -201,16 +203,32 @@ pub fn layout(map: &Wardley, measure: &dyn Measure) -> Scene {
             _ => Marker::None,
         };
         if let Some(label) = &link.label {
+            // Along the line and just above it, never upside down — mermaid's
+            // placement, bare as mermaid draws it.
+            let (dx, dy) = (b.x - a.x, b.y - a.y);
+            let mut angle = dy.atan2(dx).to_degrees();
+            if !(-90.0..=90.0).contains(&angle) {
+                angle += 180.0;
+            }
+            let (s, c) = angle.to_radians().sin_cos();
+            // The text's own "up", turned with it.
+            let up = Point::new(s, -c);
+            let line = TextLine::new(label.clone(), Font::Small);
+            let w = diagram_scene::line_width(measure, &line, FONT_SIZE);
             let mid = a.lerp(b, 0.5);
-            let label = EdgeLabel::new(
+            let pos = mid.offset(up.x * 4.0, up.y * 4.0);
+            let (hw, hh) = (w / 2.0, small);
+            let reach = Rect::centered(
                 mid,
-                vec![TextLine::new(label.clone(), Font::Small)],
-                true,
-                measure,
-                FONT_SIZE,
+                2.0 * (hw * c.abs() + hh * s.abs()),
+                2.0 * (hw * s.abs() + hh * c.abs()),
             );
-            extent = extent.union(&Rect::centered(mid, label.width + 12.0, small * 1.6));
-            edge.labels.push(label);
+            extent = extent.union(&reach);
+            scene.texts.push(Text {
+                rotate: angle,
+                paint: Paint::Role(Role::Muted),
+                ..Text::new(pos, Anchor::Middle, line)
+            });
         }
         scene.edges.push(edge);
     }
@@ -535,7 +553,7 @@ mod tests {
         for node in &scene.nodes {
             assert!(bounds.encloses(&node.rect, 0.01), "{node:?}");
         }
-        for t in &scene.texts {
+        for t in scene.texts.iter().filter(|t| t.rotate == 0.0) {
             let w = diagram_scene::line_width(&Estimate, &t.line, FONT_SIZE);
             let x = match t.anchor {
                 Anchor::Start => t.pos.x,
@@ -547,5 +565,38 @@ mod tests {
         }
         // Links less the member-to-parent ones, the trend and both forces.
         assert!(scene.edges.iter().filter(|e| e.from.is_some()).count() >= 6);
+    }
+
+    #[test]
+    fn the_visibility_title_and_link_labels_turn_with_their_lines() {
+        let source = "wardley-beta\ncomponent A [0.9, 0.2]\ncomponent B [0.3, 0.6]\n\
+            component C [0.3, 0.1]\nA +'up'> B\nC +'down'> A\n";
+        let scene = layout(&parse(source).unwrap(), &Estimate);
+        let text = |s: &str| scene.texts.iter().find(|t| t.line.plain() == s).unwrap();
+        assert_eq!(text("Visibility").rotate, -90.0);
+        assert_eq!(text("Evolution").rotate, 0.0);
+        let angle = |from: &str, to: &str| {
+            let (a, b) = (scene.node(from).unwrap(), scene.node(to).unwrap());
+            let (a, b) = (a.rect.center(), b.rect.center());
+            let mut d = (b.y - a.y).atan2(b.x - a.x).to_degrees();
+            if !(-90.0..=90.0).contains(&d) {
+                d += 180.0;
+            }
+            d
+        };
+        // A runs down-right to B, so `up` reads uphill; C rises to A.
+        let up = text("up").rotate;
+        assert!(
+            (up - angle("component:0", "component:1")).abs() < 0.5,
+            "{up}"
+        );
+        assert!(up.abs() > 10.0 && up.abs() < 90.0, "{up}");
+        let down = text("down").rotate;
+        assert!(
+            (down - angle("component:2", "component:0")).abs() < 0.5,
+            "{down}"
+        );
+        // Bare, like mermaid's: no pill on the link.
+        assert!(scene.edges.iter().all(|e| e.labels.is_empty()));
     }
 }

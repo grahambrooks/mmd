@@ -16,9 +16,10 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
+use diagram_scene::theme::text_paint;
 use diagram_scene::{
-    Anchor, Edge, Font, Marker, Node, Paint, Point, Rect, Role, Scene, Seg, Shape, Text, TextLine,
-    Weight,
+    Anchor, Area, Edge, Font, Marker, Node, Paint, Point, Rect, Role, Scene, Seg, Shape, Style,
+    Text, TextLine, Weight,
 };
 
 use super::parse::Venn;
@@ -28,6 +29,8 @@ use crate::text::Measure;
 use crate::{FONT_SIZE, PADDING};
 
 const RADIUS: f32 = 110.0;
+/// A set's fill opacity: mermaid's default `fill-opacity`.
+const SET_OPACITY: f32 = 0.1;
 /// The four-ellipse arrangement's scale: an ellipse's semi-axes are
 /// 0.72 and 0.42 of it.
 const ELLIPSE_SCALE: f32 = 300.0;
@@ -104,10 +107,11 @@ impl Outline {
         (p, d)
     }
 
-    /// The edge as a closed path of four cubic arcs (ellipses only).
+    /// The edge as a closed path of four cubic arcs.
     fn path(&self) -> Vec<Seg> {
-        let Outline::Ellipse { c, a, b, theta } = *self else {
-            return Vec::new();
+        let (c, a, b, theta) = match *self {
+            Outline::Circle { c, r } => (c, r, r, 0.0),
+            Outline::Ellipse { c, a, b, theta } => (c, a, b, theta),
         };
         // The control-point distance that makes a cubic follow a quarter
         // circle; an ellipse is an affine image of one.
@@ -129,13 +133,57 @@ impl Outline {
 
     /// The boundary as a closed polygon, for distances (ellipses only).
     fn polygon(&self) -> Vec<Point> {
-        let Outline::Ellipse { c, a, b, theta } = *self else {
-            return Vec::new();
+        match self {
+            Outline::Ellipse { .. } => self.ring(120),
+            Outline::Circle { .. } => Vec::new(),
+        }
+    }
+
+    /// The boundary as a closed polygon of `n` points, in order.
+    fn ring(&self, n: usize) -> Vec<Point> {
+        let (c, a, b, theta) = match *self {
+            Outline::Circle { c, r } => (c, r, r, 0.0),
+            Outline::Ellipse { c, a, b, theta } => (c, a, b, theta),
         };
-        (0..120)
-            .map(|i| Outline::ellipse_at(c, a, b, theta, i as f32 * TAU / 120.0).0)
+        (0..n)
+            .map(|i| Outline::ellipse_at(c, a, b, theta, i as f32 * TAU / n as f32).0)
             .collect()
     }
+}
+
+/// The region every one of `outlines` covers, as a polygon: each outline is
+/// convex, so clipping one ring by the others in turn (Sutherland–Hodgman)
+/// leaves exactly their intersection. Empty if they share nothing.
+fn intersection(outlines: &[Outline]) -> Vec<Point> {
+    let Some((first, rest)) = outlines.split_first() else {
+        return Vec::new();
+    };
+    let mut poly = first.ring(240);
+    for clip in rest {
+        let ring = clip.ring(240);
+        for i in 0..ring.len() {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            // `ring` runs one way round, so its inside is on one side of
+            // every edge.
+            let side = |p: Point| (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+            let input = std::mem::take(&mut poly);
+            for j in 0..input.len() {
+                let (p, q) = (input[j], input[(j + 1) % input.len()]);
+                let (sp, sq) = (side(p), side(q));
+                if sp >= 0.0 {
+                    poly.push(p);
+                }
+                if (sp >= 0.0) != (sq >= 0.0) {
+                    let t = sp / (sp - sq);
+                    poly.push(Point::new(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t));
+                }
+            }
+            if poly.is_empty() {
+                return poly;
+            }
+        }
+    }
+    poly
 }
 
 /// `p` in the frame of a centre `c` turned by `theta`.
@@ -165,12 +213,23 @@ fn mask_at(outlines: &[Outline], p: Point) -> u64 {
         .fold(0, |m, (i, _)| m | 1 << i)
 }
 
+/// Text over `fill`, if a region has one: black or white, whichever reads.
+fn on_fill(fill: Option<Paint>, default: Paint) -> Paint {
+    fill.map_or(default, |fill| {
+        let mut style = Style::for_shape(Shape::Rect);
+        style.fill = fill;
+        text_paint(&style)
+    })
+}
+
 fn mask_of(sets: &[usize]) -> u64 {
     sets.iter().fold(0, |m, &i| m | 1 << i)
 }
 
 /// A region the source names, and what it says.
 struct Region {
+    /// A union's `fill`: its region is shaded solid.
+    fill: Option<Paint>,
     sets: Vec<usize>,
     lines: Vec<(TextLine, Paint)>,
     /// The first source line that names it.
@@ -217,6 +276,7 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
         .iter()
         .enumerate()
         .map(|(i, set)| Region {
+            fill: None,
             sets: vec![i],
             lines: vec![(
                 TextLine::new(set.name(), Font::Bold),
@@ -226,17 +286,15 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
         })
         .collect();
     for union in &venn.unions {
-        // A union's fill can't be drawn as a filled lens; it tints the label
-        // instead.
-        let paint = rgb(union.colors.text)
-            .or(rgb(union.colors.fill))
-            .unwrap_or(Paint::Role(Role::Text));
+        // As in mermaid, a union's `fill` shades its region solid.
+        let paint = rgb(union.colors.text).unwrap_or(Paint::Role(Role::Text));
         let lines = union
             .label
             .iter()
             .map(|label| (TextLine::new(label.clone(), Font::Bold), paint))
             .collect();
         regions.push(Region {
+            fill: rgb(union.colors.fill),
             sets: union.sets.clone(),
             lines,
             line: union.line,
@@ -250,10 +308,31 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
         match regions.iter_mut().find(|r| r.sets == text.sets) {
             Some(region) => region.lines.push(line),
             None => regions.push(Region {
+                fill: None,
                 sets: text.sets.clone(),
                 lines: vec![line],
                 line: text.line,
             }),
+        }
+    }
+    // Text in a shaded region without a `color` of its own (a theme role,
+    // where a styled one is Rgb) is black or white, whichever reads on the
+    // shading drawn last over it: the lens of every filled union whose sets
+    // it lies in.
+    let shades: Vec<(Vec<usize>, Paint)> = regions
+        .iter()
+        .filter_map(|r| Some((r.sets.clone(), r.fill?)))
+        .collect();
+    for region in &mut regions {
+        let under = shades
+            .iter()
+            .rev()
+            .find(|(sets, _)| sets.iter().all(|s| region.sets.contains(s)))
+            .map(|&(_, fill)| fill);
+        for (_, paint) in &mut region.lines {
+            if let Paint::Role(_) = paint {
+                *paint = on_fill(under, *paint);
+            }
         }
     }
 
@@ -421,9 +500,12 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
     let outlines: Vec<Outline> = outlines.iter().map(|o| o.shifted(dx, dy)).collect();
 
     for (i, (set, outline)) in venn.sets.iter().zip(&outlines).enumerate() {
-        let color = rgb(set.colors.stroke)
-            .or(rgb(set.colors.fill))
-            .unwrap_or(Paint::Role(Role::Series(i as u8)));
+        let tint = rgb(set.colors.fill).unwrap_or(Paint::Role(Role::Series(i as u8)));
+        let color = rgb(set.colors.stroke).unwrap_or(tint);
+        // Mermaid's translucent set tint, under every outline.
+        let mut area = Area::new(outline.path(), tint);
+        area.opacity = SET_OPACITY;
+        scene.areas.push(area);
         match outline {
             Outline::Circle { .. } => {
                 let mut node = Node::new(format!("set:{}", set.id), Shape::Circle, outline.bbox());
@@ -440,6 +522,18 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
                 edge.pen.weight = Weight::Thick;
                 scene.edges.push(edge);
             }
+        }
+    }
+    // A union's `fill` shades the region its sets share, over the tints.
+    for region in (0..regions.len()).filter(drawn).map(|i| &regions[i]) {
+        let Some(fill) = region.fill else { continue };
+        let shared: Vec<Outline> = region.sets.iter().map(|&i| outlines[i]).collect();
+        let poly = intersection(&shared);
+        if let Some((first, rest)) = poly.split_first() {
+            let mut path = vec![Seg::Move(*first)];
+            path.extend(rest.iter().map(|&p| Seg::Line(p)));
+            path.push(Seg::Close);
+            scene.areas.push(Area::new(path, fill));
         }
     }
     for mut text in texts {
@@ -827,6 +921,46 @@ mod tests {
             );
         }
         arranged
+    }
+
+    #[test]
+    fn sets_are_tinted_and_a_union_fill_shades_its_lens() {
+        let arranged = check(
+            "venn-beta\n  set A\n  set B\n  union A,B[\"Both\"]\n  style A fill:#e8590c\n  style A,B fill:#1f2328\n",
+        );
+        let scene = &arranged.scene;
+        // One translucent tint per set, then the union's solid lens.
+        assert_eq!(scene.areas.len(), 3);
+        assert_eq!(scene.areas[0].fill, Paint::Rgb(0xe8, 0x59, 0x0c));
+        assert!(scene.areas[..2].iter().all(|a| a.opacity == SET_OPACITY));
+        let lens = &scene.areas[2];
+        assert_eq!(
+            (lens.fill, lens.opacity),
+            (Paint::Rgb(0x1f, 0x23, 0x28), 1.0)
+        );
+        for seg in &lens.path {
+            if let Seg::Line(p) | Seg::Move(p) = *seg {
+                let inside = |o: &Outline| match *o {
+                    Outline::Circle { c, r } => p.distance(c) <= r + 0.5,
+                    Outline::Ellipse { .. } => unreachable!(),
+                };
+                assert!(arranged.outlines.iter().all(inside), "{p:?}");
+            }
+        }
+        // The label reads on the dark lens.
+        let both = scene.texts.iter().find(|t| t.line.plain() == "Both");
+        assert_eq!(both.unwrap().paint, Paint::Rgb(0xf6, 0xf8, 0xfa));
+    }
+
+    #[test]
+    fn a_union_fill_shades_an_ellipse_region_too() {
+        let arranged = check(
+            "venn-beta\n  set A\n  set B\n  set C\n  set D\n  union A,B,C,D[\"All\"]\n  style A,B,C,D fill:#ffe066\n",
+        );
+        assert_eq!(arranged.scene.areas.len(), 5);
+        let lens = arranged.scene.areas.last().unwrap();
+        assert_eq!(lens.fill, Paint::Rgb(0xff, 0xe0, 0x66));
+        assert!(lens.path.len() > 4);
     }
 
     #[test]

@@ -4,8 +4,8 @@
 //! value.
 
 use diagram_scene::{
-    Anchor, Container, ContainerKind, Dash, Font, Node, Paint, Role, Scene, Shape, Style, Text,
-    TextLine, geom::Point, geom::Rect, line_width, shape::line_height,
+    Anchor, Area, Container, ContainerKind, Dash, Font, Node, Paint, Role, Scene, Seg, Shape,
+    Style, Text, TextLine, geom::Point, geom::Rect, line_width, shape::line_height,
 };
 
 use super::parse::Treemap;
@@ -20,6 +20,8 @@ const INSET: f32 = 4.0;
 /// Between outermost items.
 const GAP: f32 = 4.0;
 const TITLE_GAP: f32 = 10.0;
+/// A leaf's fill opacity, mermaid's.
+const LEAF_OPACITY: f32 = 0.3;
 
 pub fn layout(map: &Treemap, measure: &dyn Measure) -> Scene {
     let mut scene = Scene::new(0.0, 0.0);
@@ -80,6 +82,14 @@ impl Ctx<'_> {
         if it.value.is_some() {
             let mut node = Node::new(format!("item{index}"), Shape::Rect, rect);
             node.style.stroke = Paint::Role(Role::Series(series));
+            // As in mermaid, a leaf is its section's colour, translucent:
+            // a tint under a clear box, unless a style fills the box itself.
+            if it.colors.fill.is_none() {
+                node.style.fill = Paint::None;
+                let mut tint = Area::new(rect_path(rect), Paint::Role(Role::Series(series)));
+                tint.opacity = LEAF_OPACITY;
+                self.scene.areas.push(tint);
+            }
             apply(&mut node.style, &it.colors);
             let room = rect.width - 8.0;
             let fits = |font: Font| {
@@ -135,6 +145,17 @@ impl Ctx<'_> {
         let children = it.children.clone();
         self.fill(&children, inner, Some(series), INSET);
     }
+}
+
+/// A rectangle as a closed path.
+fn rect_path(r: Rect) -> Vec<Seg> {
+    vec![
+        Seg::Move(Point::new(r.x, r.y)),
+        Seg::Line(Point::new(r.right(), r.y)),
+        Seg::Line(Point::new(r.right(), r.bottom())),
+        Seg::Line(Point::new(r.x, r.bottom())),
+        Seg::Close,
+    ]
 }
 
 fn apply(style: &mut Style, colors: &Colors) {
@@ -315,5 +336,18 @@ mod tests {
             }
         }
         assert_eq!(s.containers[0].style.stroke, Paint::Role(Role::Series(0)));
+        // Every unstyled leaf is tinted in its section's colour, under a
+        // clear box.
+        let leaves: Vec<_> = s
+            .nodes
+            .iter()
+            .filter(|n| n.id.starts_with("item"))
+            .collect();
+        assert_eq!(s.areas.len(), leaves.len());
+        for (area, leaf) in s.areas.iter().zip(&leaves) {
+            assert_eq!(area.opacity, LEAF_OPACITY);
+            assert_eq!(area.fill, leaf.style.stroke);
+            assert_eq!(leaf.style.fill, Paint::None);
+        }
     }
 }
