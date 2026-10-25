@@ -1,9 +1,12 @@
-//! C4 context diagrams.
+//! C4 context, container and component diagrams.
 
 mod layout;
 mod parse;
 
-pub use parse::{C4, Element, ElementKind, Relation, parse};
+pub use parse::{
+    Arrows, Boundary, BoundaryKind, C4, Direction, Element, ElementKind, Form, Level, Relation,
+    View, parse,
+};
 
 use diagram_scene::Scene;
 

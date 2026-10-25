@@ -9,6 +9,7 @@ use mmd::geom::Rect;
 const GITGRAPH: &str = include_str!("../examples/gitgraph.mmd");
 const C4: &str = include_str!("../examples/c4.mmd");
 const FLOWCHART: &str = include_str!("../examples/flowchart.mmd");
+const C4_CONTAINER: &str = include_str!("../examples/c4-container.mmd");
 
 fn fonts() -> mmd::text::BundledFonts {
     mmd::text::BundledFonts::new().expect("bundled fonts load")
@@ -36,7 +37,7 @@ fn drawn(scene: &Scene) -> Rect {
 
 #[test]
 fn both_samples_render_to_svg() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, C4, FLOWCHART, C4_CONTAINER] {
         let svg = mmd::render(source).expect("sample renders");
         assert!(svg.starts_with("<svg"), "{}", &svg[..40.min(svg.len())]);
         assert!(svg.trim_end().ends_with("</svg>"));
@@ -45,7 +46,7 @@ fn both_samples_render_to_svg() {
 
 #[test]
 fn output_is_never_html_in_disguise() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, C4, FLOWCHART, C4_CONTAINER] {
         let svg = mmd::render(source).unwrap();
         // The whole point of the crate: SVG-only consumers must keep the text.
         assert!(!svg.contains("foreignObject"), "labels must be SVG text");
@@ -116,6 +117,7 @@ fn everything_drawn_stays_inside_the_reported_bounds() {
         mmd::gitgraph::scene(GITGRAPH, &fonts()).unwrap(),
         mmd::c4::scene(C4, &fonts()).unwrap(),
         mmd::flowchart::scene(FLOWCHART, &fonts()).unwrap(),
+        mmd::c4::scene(C4_CONTAINER, &fonts()).unwrap(),
     ] {
         let bounds = scene.bounds();
         let drawn = drawn(&scene);
@@ -133,6 +135,10 @@ fn rendering_is_deterministic() {
         mmd::render(GITGRAPH).unwrap()
     );
     assert_eq!(mmd::render(C4).unwrap(), mmd::render(C4).unwrap());
+    assert_eq!(
+        mmd::render(C4_CONTAINER).unwrap(),
+        mmd::render(C4_CONTAINER).unwrap()
+    );
 }
 
 #[test]
@@ -141,9 +147,71 @@ fn unsupported_syntax_fails_loudly_with_a_line_number() {
     assert_eq!(error.line, 3);
     assert!(error.to_string().starts_with("line 3:"));
 
-    let error = mmd::render("C4Context\n  Container(a, \"A\")\n").unwrap_err();
+    let error = mmd::render("C4Context\n  Deployment_Node(a, \"A\") {\n}\n").unwrap_err();
     assert_eq!(error.line, 2);
-    assert!(error.message.contains("Container"));
+    assert!(error.message.contains("Deployment_Node"));
+
+    let error = mmd::render("C4Dynamic\n  Rel(a, b, \"x\")\n").unwrap_err();
+    assert_eq!(error.line, 1);
+    assert!(error.message.contains("C4Dynamic"), "{error}");
+}
+
+#[test]
+fn every_c4_container_element_boundary_and_relation_reaches_the_scene() {
+    let scene = mmd::c4::scene(C4_CONTAINER, &fonts()).unwrap();
+    let texts = scene.texts();
+    for expected in [
+        "Containers of a document publishing service",
+        "Author",
+        "Git host",
+        "Publisher",
+        "[SYSTEM]",
+        "API",
+        "[Rust, axum]",
+        "Render jobs",
+        "[SQS]",
+        "Render worker",
+        "Document store",
+        "[Postgres]",
+        "CDN cache",
+        "[S3]",
+        "Publishes",
+        "[HTTPS]",
+        "Notifies",
+        "[webhook]",
+        "Enqueues",
+        "Polls",
+        "Reads and writes",
+        "[SQL]",
+        "Uploads",
+        "[S3 API]",
+    ] {
+        assert!(
+            texts.iter().any(|t| t == expected),
+            "missing {expected}: {texts:?}"
+        );
+    }
+}
+
+#[test]
+fn c4_container_boxes_never_overlap_and_the_boundary_holds_its_members() {
+    let scene = mmd::c4::scene(C4_CONTAINER, &fonts()).unwrap();
+    let boxes = rects(&scene);
+    assert_eq!(boxes.len(), 7);
+    for (i, a) in boxes.iter().enumerate() {
+        for b in &boxes[i + 1..] {
+            assert!(!a.intersects(b), "{a:?} overlaps {b:?}");
+        }
+    }
+    let boundary = scene.containers[0].rect;
+    for id in ["api", "jobs", "worker", "store"] {
+        let node = scene.node(id).unwrap();
+        assert!(boundary.encloses(&node.rect, 0.01), "{id} outside");
+    }
+    for id in ["author", "git", "cdn"] {
+        let node = scene.node(id).unwrap();
+        assert!(!boundary.intersects(&node.rect), "{id} inside");
+    }
 }
 
 #[test]

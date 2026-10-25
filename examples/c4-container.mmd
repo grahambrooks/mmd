@@ -1,0 +1,17 @@
+C4Container
+    title Containers of a document publishing service
+    Person(author, "Author", "Writes Markdown with embedded diagrams")
+    System_Ext(git, "Git host", "Holds the documents and fires webhooks")
+    System_Boundary(publisher, "Publisher") {
+        Container(api, "API", "Rust, axum", "Accepts render requests and serves PDFs")
+        ContainerQueue(jobs, "Render jobs", "SQS", "Documents waiting to render")
+        Container(worker, "Render worker", "Rust, md2pdf", "Turns Markdown into PDF")
+        ContainerDb(store, "Document store", "Postgres", "Rendered PDFs and their sources")
+    }
+    ContainerDb_Ext(cdn, "CDN cache", "S3", "Serves published PDFs")
+    Rel(author, api, "Publishes", "HTTPS")
+    Rel(git, api, "Notifies", "webhook")
+    Rel(api, jobs, "Enqueues")
+    Rel(worker, jobs, "Polls")
+    BiRel(worker, store, "Reads and writes", "SQL")
+    Rel_Back(cdn, worker, "Uploads", "S3 API")

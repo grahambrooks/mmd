@@ -35,6 +35,13 @@ pub enum Kind {
     GitGraph,
     C4Context,
     Flowchart,
+    C4Container,
+    C4Component,
+    /// Recognised so its error comes from the C4 parser, which names it;
+    /// not yet supported.
+    C4Dynamic,
+    /// Recognised so its error comes from the C4 parser; not yet supported.
+    C4Deployment,
 }
 
 impl Kind {
@@ -44,6 +51,10 @@ impl Kind {
             Kind::GitGraph => "gitGraph",
             Kind::C4Context => "C4Context",
             Kind::Flowchart => "flowchart",
+            Kind::C4Container => "C4Container",
+            Kind::C4Component => "C4Component",
+            Kind::C4Dynamic => "C4Dynamic",
+            Kind::C4Deployment => "C4Deployment",
         }
     }
 }
@@ -87,7 +98,15 @@ pub fn detect(source: &str) -> Option<Kind> {
         if line == "graph" || line.starts_with("graph ") {
             return Some(Kind::Flowchart);
         }
-        for kind in [Kind::GitGraph, Kind::C4Context, Kind::Flowchart] {
+        for kind in [
+            Kind::GitGraph,
+            Kind::C4Context,
+            Kind::C4Container,
+            Kind::C4Component,
+            Kind::C4Dynamic,
+            Kind::C4Deployment,
+            Kind::Flowchart,
+        ] {
             let keyword = kind.keyword();
             if line == keyword
                 || line.starts_with(&format!("{keyword} "))
@@ -133,11 +152,18 @@ pub fn render_with(source: &str, theme: &Theme, measure: &dyn Measure) -> Result
 pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
     match detect(source) {
         Some(Kind::GitGraph) => gitgraph::scene(source, measure),
-        Some(Kind::C4Context) => c4::scene(source, measure),
+        Some(
+            Kind::C4Context
+            | Kind::C4Container
+            | Kind::C4Component
+            | Kind::C4Dynamic
+            | Kind::C4Deployment,
+        ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         None => Err(Error::new(
             first_content_line(source),
-            "unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`",
+            "unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`, \
+             `C4Container`, `C4Component`",
         )),
     }
 }
@@ -160,6 +186,23 @@ mod tests {
         assert_eq!(detect("gitGraph\n  commit\n"), Some(Kind::GitGraph));
         assert_eq!(detect("gitGraph:\n"), Some(Kind::GitGraph));
         assert_eq!(detect("C4Context\n  title x\n"), Some(Kind::C4Context));
+        assert_eq!(detect("C4Container\n"), Some(Kind::C4Container));
+        assert_eq!(detect("C4Component\n"), Some(Kind::C4Component));
+    }
+
+    #[test]
+    fn every_c4_header_reaches_the_c4_parser() {
+        for header in ["C4Dynamic", "C4Deployment"] {
+            let error = render_with(&format!("{header}\n"), &Theme::default(), &Fixed).unwrap_err();
+            assert!(error.message.contains(header), "{error:?}");
+            assert!(!error.message.contains("unrecognised"), "{error:?}");
+        }
+        let svg = render_with(
+            "C4Container\nContainer(a, \"A\", \"Rust\")\n",
+            &Theme::default(),
+            &Fixed,
+        );
+        assert!(svg.unwrap().contains("[Rust]"));
     }
 
     #[test]
