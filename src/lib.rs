@@ -12,6 +12,7 @@
 //! See `DESIGN.md` for the supported syntax; anything outside it is a parse
 //! error carrying a line number, never a silent omission.
 
+mod accessibility;
 pub mod architecture;
 pub mod block;
 pub mod c4;
@@ -279,16 +280,19 @@ pub fn render_with(source: &str, theme: &Theme, measure: &dyn Measure) -> Result
 /// Colours in it are theme roles; `measure` should measure the font the
 /// host will draw text in.
 pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
-    match frontmatter::split(source)? {
-        Some(front) => {
-            let mut scene = diagram(&front.body, measure)?;
-            if let Some(title) = &front.title {
-                frontmatter::add_title(&mut scene, title, measure);
-            }
-            Ok(scene)
-        }
-        None => diagram(source, measure),
+    let (body, front_title) = match frontmatter::split(source)? {
+        Some(front) => (front.body, front.title),
+        None => (source.to_string(), None),
+    };
+    let mut scene = diagram(&body, measure)?;
+    if let Some(title) = &front_title {
+        frontmatter::add_title(&mut scene, title, measure);
     }
+    // The accessible name: an `accTitle`, else the front matter's title,
+    // else the title the diagram draws.
+    let fallback = front_title.or_else(|| scene.title.as_ref().map(|t| t.line.plain()));
+    scene.accessibility = accessibility::of(&body, fallback);
+    Ok(scene)
 }
 
 /// Lay out a source with no front matter.
@@ -410,6 +414,25 @@ mod tests {
     }
 
     #[test]
+    fn every_svg_carries_its_accessible_name_and_description() {
+        let svg = render_with(
+            "pie title Pets\n  accDescr: Dogs outnumber cats\n  \"Dogs\": 3\n  \"Cats\": 1\n",
+            &Theme::default(),
+            &Fixed,
+        )
+        .unwrap();
+        assert!(svg.contains("<title>Pets</title>"), "drawn title names it");
+        assert!(svg.contains("<desc>Dogs outnumber cats</desc>"));
+        let svg = render_with(
+            "graph\n  accTitle: Flow\n  A --> B\n",
+            &Theme::default(),
+            &Fixed,
+        )
+        .unwrap();
+        assert!(svg.contains("<title>Flow</title>"));
+    }
+
+    #[test]
     fn front_matter_titles_the_diagram_and_keeps_line_numbers() {
         let scene = scene(
             "\n---\ntitle: Flow\nconfig:\n  look: handDrawn\n---\ngraph\n  A --> B\n",
@@ -417,6 +440,7 @@ mod tests {
         )
         .unwrap();
         assert!(scene.texts().iter().any(|t| t == "Flow"));
+        assert_eq!(scene.accessibility.title.as_deref(), Some("Flow"));
         assert_eq!(detect("---\ntitle: x\n---\npie\n"), Some(Kind::Pie));
         let error = render_with(
             "---\ntitle: x\n---\ngraph\n  A -->\n",
