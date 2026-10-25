@@ -1,0 +1,13 @@
+%% showcase: xychart with data labels from front matter
+%% type: xychart
+%% prose: Mermaid's docs turn on bar value labels (and set colours) through YAML front matter config. mmd rejects front matter outright rather than drawing the chart without the labels it asks for.
+---
+config:
+  xyChart:
+    showDataLabel: true
+---
+xychart-beta
+    title "Sales Revenue"
+    x-axis [jan, feb, mar, apr, may]
+    y-axis "Revenue (in $)" 4000 --> 11000
+    bar [5000, 6000, 7500, 8200, 9500]

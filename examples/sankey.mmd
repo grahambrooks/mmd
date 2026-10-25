@@ -1,0 +1,20 @@
+%% showcase: sankey
+%% prose: Each row is a flow from source to target. Nodes stand in columns by how far into the flow they are, with sinks in the last column; each node is as tall as the flow through it and each ribbon as wide as its flow. Labels give the node's total.
+%% approx: Ribbons are drawn in strands of the source's colour rather than a gradient from source to target, and node order comes from a few sweeps rather than d3-sankey's relaxation.
+%% approx: Labels sit on a background so they read over the ribbons, and the last column's labels go outside it to the right rather than over the ribbons arriving there.
+sankey-beta
+%% source,target,value
+Markdown,Parser,120
+Markdown,Front matter,8
+Parser,Prose,70
+Parser,Mermaid blocks,42
+Parser,Code blocks,8
+Mermaid blocks,mmd,38
+Mermaid blocks,"Unsupported, raw",4
+mmd,SVG,38
+SVG,PDF,30
+SVG,HTML,8
+Prose,PDF,62
+Prose,HTML,8
+Code blocks,PDF,8
+Front matter,PDF,8

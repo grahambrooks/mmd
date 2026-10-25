@@ -1,0 +1,8 @@
+%% showcase: horizontal xychart
+%% prose: With `horizontal` the categories run down the left and the values along the top. No y-axis range is given, so it is chosen from the data and widened to round ticks that include zero.
+%% approx: The automatic value range includes zero and ends on round ticks; mermaid spans exactly the data's minimum to maximum.
+xychart-beta horizontal
+    title "Lines of Rust per diagram type"
+    x-axis [gitGraph, C4, flowchart, erDiagram, "pie and charts"]
+    y-axis "Lines"
+    bar [1830, 2160, 4120, 1530, 900]

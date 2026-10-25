@@ -1,0 +1,12 @@
+%% showcase: pie with showData
+%% prose: Slices run clockwise from twelve o'clock in source order, each with its share as a percentage. With showData the legend gives every slice's value, including one too small to label on the pie.
+%% approx: Slices are filled with dense overlapping strokes rather than a filled path; a slice under half a degree shows as a hairline rather than vanishing as it does in mermaid.
+%% approx: Colours are the theme's six series colours, cycling after six slices, rather than mermaid's twelve pie colours.
+pie showData
+    title Where a build's time goes
+    "Compile" : 412.5
+    "Link" : 96
+    "Tests" : 188
+    "Docs" : 41
+    "Packaging" : 22
+    "Upload" : 2

@@ -13,6 +13,7 @@
 //! error carrying a line number, never a silent omission.
 
 pub mod c4;
+mod chart;
 pub mod class;
 pub mod er;
 pub mod flowchart;
@@ -22,12 +23,17 @@ mod graph;
 pub mod journey;
 pub mod kanban;
 mod layered;
+pub mod pie;
+pub mod quadrant;
+pub mod radar;
 pub mod requirement;
+pub mod sankey;
 pub mod sequence;
 pub mod state;
 mod style;
 pub mod text;
 pub mod timeline;
+pub mod xychart;
 
 use std::fmt;
 
@@ -59,6 +65,11 @@ pub enum Kind {
     State,
     Class,
     Requirement,
+    Pie,
+    XyChart,
+    Quadrant,
+    Radar,
+    Sankey,
 }
 
 impl Kind {
@@ -81,6 +92,11 @@ impl Kind {
         Kind::State,
         Kind::Class,
         Kind::Requirement,
+        Kind::Pie,
+        Kind::XyChart,
+        Kind::Quadrant,
+        Kind::Radar,
+        Kind::Sankey,
     ];
 
     /// The keyword that introduces this diagram.
@@ -102,6 +118,11 @@ impl Kind {
             Kind::State => "stateDiagram-v2",
             Kind::Class => "classDiagram",
             Kind::Requirement => "requirementDiagram",
+            Kind::Pie => "pie",
+            Kind::XyChart => "xychart",
+            Kind::Quadrant => "quadrantChart",
+            Kind::Radar => "radar-beta",
+            Kind::Sankey => "sankey",
         }
     }
 
@@ -114,6 +135,8 @@ impl Kind {
             Kind::State => &["stateDiagram"],
             Kind::Class => &["classDiagram-v2"],
             Kind::Requirement => &["requirement"],
+            Kind::XyChart => &["xychart-beta"],
+            Kind::Sankey => &["sankey-beta"],
             _ => &[],
         }
     }
@@ -217,6 +240,11 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::State) => state::scene(source, measure),
         Some(Kind::Class) => class::scene(source, measure),
         Some(Kind::Requirement) => requirement::scene(source, measure),
+        Some(Kind::Pie) => pie::scene(source, measure),
+        Some(Kind::XyChart) => xychart::scene(source, measure),
+        Some(Kind::Quadrant) => quadrant::scene(source, measure),
+        Some(Kind::Radar) => radar::scene(source, measure),
+        Some(Kind::Sankey) => sankey::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {
@@ -266,6 +294,19 @@ mod tests {
     }
 
     #[test]
+    fn detects_the_data_charts_and_their_aliases() {
+        assert_eq!(detect("pie title Pets\n"), Some(Kind::Pie));
+        assert_eq!(detect("pie showData\n"), Some(Kind::Pie));
+        assert_eq!(detect("xychart\n"), Some(Kind::XyChart));
+        assert_eq!(detect("xychart-beta horizontal\n"), Some(Kind::XyChart));
+        assert_eq!(detect("quadrantChart\n"), Some(Kind::Quadrant));
+        assert_eq!(detect("radar-beta:\n"), Some(Kind::Radar));
+        assert_eq!(detect("sankey\n"), Some(Kind::Sankey));
+        assert_eq!(detect("sankey-beta\n"), Some(Kind::Sankey));
+        assert_eq!(detect("pies\n"), None);
+    }
+
+    #[test]
     fn every_c4_header_reaches_the_c4_parser() {
         for header in ["C4Dynamic", "C4Deployment"] {
             let svg = render_with(
@@ -301,8 +342,8 @@ mod tests {
 
     #[test]
     fn unsupported_diagrams_are_an_error_with_a_line() {
-        assert_eq!(detect("pie title Pets\n  \"Dogs\" : 3\n"), None);
-        let error = render_with("\n\npie\n", &Theme::default(), &Fixed).unwrap_err();
+        assert_eq!(detect("zenuml\n  A.b()\n"), None);
+        let error = render_with("\n\nzenuml\n", &Theme::default(), &Fixed).unwrap_err();
         assert_eq!(error.line, 3);
         assert!(error.to_string().contains("unrecognised diagram"));
     }
