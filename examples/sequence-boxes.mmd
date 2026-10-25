@@ -1,0 +1,33 @@
+%% showcase: sequenceDiagram with boxes, create and destroy
+%% prose: Boxes group participants behind a tinted panel. A created participant's head appears where the creating message arrives, and a destroyed one's lifeline ends in a cross with no footer. Autonumber circles each message's start; the participant types draw as a database, a queue, stacked collections and the UML boundary, control and entity icons.
+%% approx: Box labels are drawn in the top-left corner rather than centred.
+%% approx: The boundary, control and entity icons are simplified; collections are two offset boxes.
+%% approx: Half arrowheads (-|\ and the like) are drawn as whole ones.
+sequenceDiagram
+    autonumber
+    box rgb(232, 240, 254) Front end
+        actor U as User
+        participant UI@{ "type": "boundary", "alias": "Checkout page" }
+    end
+    box rgb(254, 243, 226) Services
+        participant O@{ "type": "control" } as Orders
+        participant Q@{ "type": "queue" } as Jobs
+        participant I@{ "type": "entity" } as Invoice
+    end
+    participant DB@{ "type": "database" } as Ledger
+    participant L@{ "type": "collections" } as Logs
+
+    U->>UI: Pay
+    UI->>O: Submit order
+    O->>DB: Insert
+    DB-->>O: id 4711
+    O-)Q: Enqueue invoice job
+    create participant W as Worker
+    Q->>W: Start
+    W->>I: Build PDF
+    W-|\L: Write log line
+    destroy W
+    W-->>Q: Finished
+    autonumber 100 10
+    O<<->>UI: Order status
+    UI-->>U: Receipt #35;4711

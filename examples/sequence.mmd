@@ -1,0 +1,28 @@
+%% showcase: sequenceDiagram
+%% prose: Participants stand in columns sized to their labels, with time running down the page and every participant mirrored at the foot. Thin bars show activations (nested ones step right), notes sit beside or over lifelines, a self-message loops back, and solid, dashed, open-headed and crossed arrows keep their distinct ends.
+%% approx: Participant boxes are as wide as their labels (at least 100 px) rather than mermaid's fixed 150 px.
+%% approx: Message labels sit on a background-coloured backing so a lifeline never strikes through them; mermaid draws them bare.
+%% approx: A self-message's label sits to the right of its lifeline rather than centred over the loop.
+sequenceDiagram
+    %% Publishing a document through the preview service.
+    title Publishing a draft
+    actor A as Author
+    participant E as Editor
+    participant R as Renderer
+    participant S as Store
+
+    A->>+E: Save draft
+    E->>+R: Render preview
+    R->>R: Lay out<br>diagrams
+    activate R
+    R-->>E: SVG
+    deactivate R
+    Note right of R: Labels are SVG text,<br>never HTML
+    R--)-E: Fonts embedded
+    E->>S: Upload
+    S--xE: Quota exceeded
+    Note over E,S: Retried once with a smaller payload
+    E-)S: Upload (compressed)
+    S-->>E: 201 Created
+    E-->>-A: Published
+    Note left of A: Done

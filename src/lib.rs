@@ -20,6 +20,7 @@ pub mod gitgraph;
 pub mod journey;
 pub mod kanban;
 mod layered;
+pub mod sequence;
 mod style;
 pub mod text;
 pub mod timeline;
@@ -53,6 +54,7 @@ pub enum Kind {
     Timeline,
     Journey,
     Kanban,
+    Sequence,
 }
 
 impl Kind {
@@ -71,6 +73,7 @@ impl Kind {
         Kind::Timeline,
         Kind::Journey,
         Kind::Kanban,
+        Kind::Sequence,
     ];
 
     /// The keyword that introduces this diagram.
@@ -88,6 +91,7 @@ impl Kind {
             Kind::Timeline => "timeline",
             Kind::Journey => "journey",
             Kind::Kanban => "kanban",
+            Kind::Sequence => "sequenceDiagram",
         }
     }
 
@@ -195,6 +199,7 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Timeline) => timeline::scene(source, measure),
         Some(Kind::Journey) => journey::scene(source, measure),
         Some(Kind::Kanban) => kanban::scene(source, measure),
+        Some(Kind::Sequence) => sequence::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {
