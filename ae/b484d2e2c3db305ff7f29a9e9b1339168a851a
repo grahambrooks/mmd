@@ -1,0 +1,43 @@
+src/sequence/layout.rs
+  s_0c7b5d39344b95::t_5b6566883f8632 1214-1215
+  s_0c7b5d39344b95::t_8d456d09d11d81 1211-1213,1216-1230
+  s_0c7b5d39344b95::t_1fade3d5c8a771 19-21,46-48,178-184,357,525-526,576-577,579-603,606,609
+src/state/parse.rs
+  s_0c7b5d39344b95::t_5b6566883f8632 472-478,841-844
+  s_0c7b5d39344b95::t_2155f2cd461f76 313-319,321-346,349,351,353-360,362-375,377-396,398-405,408-409,412-417,421-431,434-444,463-471,479-517
+  s_0c7b5d39344b95::t_c6bf1106d1d36c 797-804,806-840,845-847,865-876
+  s_0c7b5d39344b95::t_6959ef07e84b23 805
+  s_0c7b5d39344b95::t_69d2e24f9f4eff 518-519
+examples/state-inline-composite.mmd
+  s_0c7b5d39344b95::t_bc014f5ee85002 1-8
+src/kanban/parse.rs
+  s_0c7b5d39344b95::t_5b6566883f8632 77-80,137-141,144
+  s_0c7b5d39344b95::t_6d292b81f23647 8-11,30-34,42-44,75-76,81-93,95-98,109-110,136,169-170,188-206,288,293-294,371-389,394-397
+src/sequence/parse.rs
+  s_0c7b5d39344b95::t_33468c5c3aea01 294,304
+  s_0c7b5d39344b95::t_28e7ff4e547f92 87,263-293,295-303,305-309,320-322,627-629,633,636,645-646,733,1179-1194,1198-1213
+  s_0c7b5d39344b95::t_5b6566883f8632 1195-1197
+examples/kanban-icons.mmd
+  s_0c7b5d39344b95::t_e6061e7d1d350f 1-13
+src/kanban/layout.rs
+  s_0c7b5d39344b95::t_1d4e640d1a3750 43-44,134-154,157,193-203,222,224,240-241,253,264-289
+examples/sequence-autonumber-decimal.mmd
+  s_0c7b5d39344b95::t_9d6bd934d23c5c 3-9
+  s_0c7b5d39344b95::t_706b788ca8e831 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aeb484d2e2c3db305ff7f29a9e9b1339168a851a",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
