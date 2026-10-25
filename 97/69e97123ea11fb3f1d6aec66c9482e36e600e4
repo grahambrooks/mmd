@@ -1,0 +1,63 @@
+examples/c4-styles.mmd
+  s_0c7b5d39344b95::t_efa5c99769bb21 9
+src/flowchart/layout.rs
+  s_0c7b5d39344b95::t_b6b7798dcb0c83 457-461,668-669,1108-1109,1112-1116
+  s_0c7b5d39344b95::t_b5cef28b15f5f2 1110-1111
+  s_0c7b5d39344b95::t_05776d476783d3 1117-1118
+examples/treemap.mmd
+  s_0c7b5d39344b95::t_312e9015603f8c 3
+src/treemap/layout.rs
+  s_0c7b5d39344b95::t_8821f4d18c0044 7-8,23-24,85-92,150-160,339-340,346-351
+  s_0c7b5d39344b95::t_b5cef28b15f5f2 341-345
+src/venn/layout.rs
+  s_0c7b5d39344b95::t_d9abda51b939dc 19,32-33,142,187,216-224,231-232,279,311,503-508,527-536
+  s_0c7b5d39344b95::t_b5cef28b15f5f2 21-22
+  s_0c7b5d39344b95::t_1e47dfeb5fb8c4 336-337,537-538,926-965
+  s_0c7b5d39344b95::t_36dc258a4875b6 289-290,297,318-335
+  s_0c7b5d39344b95::t_5025f3cc3af18b 110,112-114,136-141,143-146,148-149,154-186
+  s_0c7b5d39344b95::t_19647993ce0e0d 188
+src/c4/parse.rs
+  s_0c7b5d39344b95::t_bd165126d580fd 198
+src/mindmap/layout.rs
+  s_0c7b5d39344b95::t_ed67b22c4cadc9 116-125
+  s_0c7b5d39344b95::t_b5cef28b15f5f2 8
+  s_0c7b5d39344b95::t_d1ea181ce2d56c 281-293
+  s_0c7b5d39344b95::t_4b6e1c42854bb2 4,7,20-21
+examples/venn.mmd
+  s_0c7b5d39344b95::t_49cf573d9cde7b 2
+  s_0c7b5d39344b95::t_49ad20578cb2d5 21
+examples/flowchart.mmd
+  s_0c7b5d39344b95::t_be656dfdfe349a 24
+src/flowchart/parse.rs
+  s_0c7b5d39344b95::t_b6b7798dcb0c83 98
+src/wardley/layout.rs
+  s_0c7b5d39344b95::t_9d305537f1d101 569-588,593-594,599-601
+  s_0c7b5d39344b95::t_daa981e2d1910c 206-217,219-221,223-224,226-231
+  s_0c7b5d39344b95::t_35d2c0886919fa 104-112
+  s_0c7b5d39344b95::t_00be0bc2f62034 556
+  s_0c7b5d39344b95::t_b5cef28b15f5f2 5-6,589-592,595-598
+src/c4/layout.rs
+  s_0c7b5d39344b95::t_db948724b7e866 802-827
+  s_0c7b5d39344b95::t_bd165126d580fd 212-216
+examples/mindmap.mmd
+  s_0c7b5d39344b95::t_3830305f73935f 2
+examples/venn-four-sets.mmd
+  s_0c7b5d39344b95::t_e2cb4e3519599c 18
+  s_0c7b5d39344b95::t_1c757d5b3b19bc 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9769e97123ea11fb3f1d6aec66c9482e36e600e4",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
