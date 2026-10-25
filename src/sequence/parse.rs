@@ -122,6 +122,9 @@ pub enum Frame {
     Par,
     Critical,
     Break,
+    /// ZenUML's `try`/`catch`/`finally`; sequenceDiagram has no keyword
+    /// for it.
+    Try,
     /// `rect`: a coloured background, no border or label.
     Rect(Rgb),
 }
@@ -136,6 +139,7 @@ impl Frame {
             Frame::Par => "par",
             Frame::Critical => "critical",
             Frame::Break => "break",
+            Frame::Try => "try",
             Frame::Rect(_) => "rect",
         }
     }

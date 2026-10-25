@@ -1,0 +1,34 @@
+%% showcase: zenuml control flow
+%% prose: ZenUML's control flow maps onto sequence fragments: `if`/`else if`/`else` draws an alt frame with a divider per branch, `while`, `for`, `forEach` and `loop` draw loops, `opt` and `par` keep their names, and `try`/`catch`/`finally` draws a try frame with a section for each handler. Async messages (`A->B: text`) have open arrowheads; `@return` makes the next one a dashed reply. A call with no named sender comes from ZenUML's implicit starter.
+%% approx: Drawn with mmd's sequence layout and look, not ZenUML's own renderer.
+%% approx: The implicit starter is an unnamed stick figure in the leftmost column.
+%% approx: `par` is a single frame around its parallel statements, with no dividers between them.
+zenuml
+    title Placing an order
+    @Control API
+    @Entity Orders
+    @Database DB
+    API.placeOrder(cart) {
+      if(cart.isEmpty) {
+        @return
+        API->Client: 400 empty cart
+      } else if(cart.total > limit) {
+        API->Client: needs approval
+      } else {
+        try {
+          order = new Orders(cart)
+          forEach(item in cart) {
+            DB.reserve(item)
+          }
+        } catch(OutOfStock) {
+          DB.rollback()
+        } finally {
+          DB.close()
+        }
+      }
+      par {
+        API->Client: confirmation
+        API->DB: audit log
+      }
+      return order
+    }

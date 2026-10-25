@@ -47,6 +47,7 @@ pub mod treeview;
 pub mod venn;
 pub mod wardley;
 pub mod xychart;
+pub mod zenuml;
 
 use std::fmt;
 
@@ -94,6 +95,7 @@ pub enum Kind {
     Wardley,
     EventModeling,
     Architecture,
+    ZenUml,
 }
 
 impl Kind {
@@ -132,6 +134,7 @@ impl Kind {
         Kind::Wardley,
         Kind::EventModeling,
         Kind::Architecture,
+        Kind::ZenUml,
     ];
 
     /// The keyword that introduces this diagram.
@@ -169,6 +172,7 @@ impl Kind {
             Kind::Wardley => "wardley-beta",
             Kind::EventModeling => "eventmodeling",
             Kind::Architecture => "architecture-beta",
+            Kind::ZenUml => "zenuml",
         }
     }
 
@@ -324,6 +328,7 @@ fn diagram(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Wardley) => wardley::scene(source, measure),
         Some(Kind::EventModeling) => eventmodeling::scene(source, measure),
         Some(Kind::Architecture) => architecture::scene(source, measure),
+        Some(Kind::ZenUml) => zenuml::scene(source, measure),
         None => {
             let line = first_content_line(source);
             let expected: Vec<String> = Kind::ALL
@@ -427,8 +432,9 @@ mod tests {
 
     #[test]
     fn unsupported_diagrams_are_an_error_with_a_line() {
-        assert_eq!(detect("zenuml\n  A.b()\n"), None);
-        let error = render_with("\n\nzenuml\n", &Theme::default(), &Fixed).unwrap_err();
+        assert_eq!(detect("notADiagram\n  A.b()\n"), None);
+        assert_eq!(detect("zenuml\n  A.b()\n"), Some(Kind::ZenUml));
+        let error = render_with("\n\nnotADiagram\n", &Theme::default(), &Fixed).unwrap_err();
         assert_eq!(error.line, 3);
         assert!(error.to_string().contains("unrecognised diagram"));
     }
