@@ -13,6 +13,7 @@
 //! error carrying a line number, never a silent omission.
 
 pub mod c4;
+pub mod er;
 pub mod flowchart;
 pub mod gitgraph;
 mod layered;
@@ -35,6 +36,7 @@ pub enum Kind {
     GitGraph,
     C4Context,
     Flowchart,
+    Er,
 }
 
 impl Kind {
@@ -44,6 +46,7 @@ impl Kind {
             Kind::GitGraph => "gitGraph",
             Kind::C4Context => "C4Context",
             Kind::Flowchart => "flowchart",
+            Kind::Er => "erDiagram",
         }
     }
 }
@@ -87,7 +90,7 @@ pub fn detect(source: &str) -> Option<Kind> {
         if line == "graph" || line.starts_with("graph ") {
             return Some(Kind::Flowchart);
         }
-        for kind in [Kind::GitGraph, Kind::C4Context, Kind::Flowchart] {
+        for kind in [Kind::GitGraph, Kind::C4Context, Kind::Flowchart, Kind::Er] {
             let keyword = kind.keyword();
             if line == keyword
                 || line.starts_with(&format!("{keyword} "))
@@ -135,9 +138,10 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::GitGraph) => gitgraph::scene(source, measure),
         Some(Kind::C4Context) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
+        Some(Kind::Er) => er::scene(source, measure),
         None => Err(Error::new(
             first_content_line(source),
-            "unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`",
+            "unrecognised diagram: expected one of `flowchart`, `erDiagram`, `gitGraph`, `C4Context`",
         )),
     }
 }
@@ -160,6 +164,7 @@ mod tests {
         assert_eq!(detect("gitGraph\n  commit\n"), Some(Kind::GitGraph));
         assert_eq!(detect("gitGraph:\n"), Some(Kind::GitGraph));
         assert_eq!(detect("C4Context\n  title x\n"), Some(Kind::C4Context));
+        assert_eq!(detect("erDiagram\n  A ||--o{ B : x\n"), Some(Kind::Er));
     }
 
     #[test]

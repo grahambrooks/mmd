@@ -54,6 +54,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     so they stay readable where they cross a line.",
             source: include_str!("c4.mmd"),
         },
+        Sample {
+            heading: "erDiagram",
+            prose: "Entities are tables of typed attributes with their keys and \
+                    comments, placed by the same layered layout as flowcharts. \
+                    Relationships carry a crow's foot for the cardinality at each \
+                    end; non-identifying ones are dashed.",
+            source: include_str!("er.mmd"),
+        },
     ];
 
     let regular = load_font("Regular").ok_or("bundled regular face missing")?;
