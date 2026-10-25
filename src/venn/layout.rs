@@ -5,8 +5,10 @@
 //! - Four sets: the classic four-ellipse Venn diagram, in which all fifteen
 //!   regions exist.
 //! - Five or more: an Euler diagram of circles, relaxed so that sets sharing a
-//!   `union` (or a `text`) overlap and the rest keep apart. When a region the
-//!   source names does not come out, that is an error naming it.
+//!   `union` (or a `text`) overlap and the rest keep apart. When no attempt
+//!   forms every region the source names, five sets become Grünbaum's
+//!   five-ellipse Venn diagram (all 31 regions), and six or more list the
+//!   regions still missing beneath the diagram as `A ∩ C: label`.
 //!
 //! Every region's labels are stacked at its roomiest point. Mermaid lays
 //! circles out with venn.js so areas follow the sizes; here a size only
@@ -29,6 +31,10 @@ const RADIUS: f32 = 110.0;
 /// The four-ellipse arrangement's scale: an ellipse's semi-axes are
 /// 0.72 and 0.42 of it.
 const ELLIPSE_SCALE: f32 = 300.0;
+/// The five-ellipse arrangement's semi-major axis.
+const FIVE_SCALE: f32 = 240.0;
+/// Heads the list of named regions the circles could not form.
+const LIST_HEADING: &str = "Not drawn as a region";
 /// The clear gap between two circles that share no region.
 const GAP: f32 = 24.0;
 /// The label-placement grid's spacing.
@@ -167,9 +173,8 @@ fn mask_of(sets: &[usize]) -> u64 {
 struct Region {
     sets: Vec<usize>,
     lines: Vec<(TextLine, Paint)>,
-    /// The first source line that names it, and how, for an error.
+    /// The first source line that names it.
     line: usize,
-    what: String,
 }
 
 /// A laid-out diagram plus what the tests check it against.
@@ -204,6 +209,53 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
         .iter()
         .map(|s| RADIUS * (s.size() / largest).sqrt().clamp(0.7, 1.0))
         .collect();
+
+    // What each region says: a set's name, a union's label, its texts.
+    let rgb = |c: Option<Rgb>| c.map(|(r, g, b)| Paint::Rgb(r, g, b));
+    let mut regions: Vec<Region> = venn
+        .sets
+        .iter()
+        .enumerate()
+        .map(|(i, set)| Region {
+            sets: vec![i],
+            lines: vec![(
+                TextLine::new(set.name(), Font::Bold),
+                rgb(set.colors.text).unwrap_or(Paint::Role(Role::Text)),
+            )],
+            line: set.line,
+        })
+        .collect();
+    for union in &venn.unions {
+        // A union's fill can't be drawn as a filled lens; it tints the label
+        // instead.
+        let paint = rgb(union.colors.text)
+            .or(rgb(union.colors.fill))
+            .unwrap_or(Paint::Role(Role::Text));
+        let lines = union
+            .label
+            .iter()
+            .map(|label| (TextLine::new(label.clone(), Font::Bold), paint))
+            .collect();
+        regions.push(Region {
+            sets: union.sets.clone(),
+            lines,
+            line: union.line,
+        });
+    }
+    for text in &venn.texts {
+        let line = (
+            TextLine::new(text.name(), Font::Body),
+            rgb(text.colors.text).unwrap_or(Paint::Role(Role::Muted)),
+        );
+        match regions.iter_mut().find(|r| r.sets == text.sets) {
+            Some(region) => region.lines.push(line),
+            None => regions.push(Region {
+                sets: text.sets.clone(),
+                lines: vec![line],
+                line: text.line,
+            }),
+        }
+    }
 
     let outlines: Vec<Outline> = match n {
         1 => vec![Outline::Circle {
@@ -248,75 +300,12 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
             .collect()
         }
         4 => four_ellipses(),
-        _ => euler(venn, &radii)
-            .into_iter()
-            .zip(&radii)
-            .map(|(c, &r)| Outline::Circle { c, r })
-            .collect(),
+        _ => many(venn, &radii, &regions),
     };
-
-    // What each region says: a set's name, a union's label, its texts.
-    let rgb = |c: Option<Rgb>| c.map(|(r, g, b)| Paint::Rgb(r, g, b));
-    let ids = |sets: &[usize]| {
-        sets.iter()
-            .map(|&i| venn.sets[i].id.as_str())
-            .collect::<Vec<_>>()
-            .join(",")
-    };
-    let mut regions: Vec<Region> = venn
-        .sets
-        .iter()
-        .enumerate()
-        .map(|(i, set)| Region {
-            sets: vec![i],
-            lines: vec![(
-                TextLine::new(set.name(), Font::Bold),
-                rgb(set.colors.text).unwrap_or(Paint::Role(Role::Text)),
-            )],
-            line: set.line,
-            what: format!("set `{}`", set.id),
-        })
-        .collect();
-    for union in &venn.unions {
-        // A union's fill can't be drawn as a filled lens; it tints the label
-        // instead.
-        let paint = rgb(union.colors.text)
-            .or(rgb(union.colors.fill))
-            .unwrap_or(Paint::Role(Role::Text));
-        let lines = union
-            .label
-            .iter()
-            .map(|label| (TextLine::new(label.clone(), Font::Bold), paint))
-            .collect();
-        regions.push(Region {
-            sets: union.sets.clone(),
-            lines,
-            line: union.line,
-            what: format!("`union {}`", ids(&union.sets)),
-        });
-    }
-    for text in &venn.texts {
-        let line = (
-            TextLine::new(text.name(), Font::Body),
-            rgb(text.colors.text).unwrap_or(Paint::Role(Role::Muted)),
-        );
-        match regions.iter_mut().find(|r| r.sets == text.sets) {
-            Some(region) => region.lines.push(line),
-            None => regions.push(Region {
-                sets: text.sets.clone(),
-                lines: vec![line],
-                line: text.line,
-                what: format!("text `{}` in {}", text.id, ids(&text.sets)),
-            }),
-        }
-    }
 
     // Sample the picture once: each point's sets and its room to the
     // nearest edge.
-    let mut extent = outlines[0].bbox();
-    for o in &outlines[1..] {
-        extent = extent.union(&o.bbox());
-    }
+    let (mut extent, samples) = sample(&outlines);
     let polygons: Vec<Vec<Point>> = outlines.iter().map(Outline::polygon).collect();
     let room = |p: Point| {
         outlines
@@ -330,48 +319,22 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
             })
             .fold(f32::MAX, f32::min)
     };
-    let mut samples: Vec<(Point, u64)> = Vec::new();
-    let mut y = extent.y;
-    while y <= extent.y + extent.height {
-        let mut x = extent.x;
-        while x <= extent.x + extent.width {
-            let p = Point::new(x, y);
-            let m = mask_at(&outlines, p);
-            if m != 0 {
-                samples.push((p, m));
-            }
-            x += STEP;
-        }
-        y += STEP;
-    }
-
-    // A region the source names must come out in the drawing; one that
-    // doesn't is an error, not a dropped label.
-    let mut missing: Vec<&Region> = regions
-        .iter()
-        .filter(|r| {
-            let m = mask_of(&r.sets);
-            !samples.iter().any(|&(_, s)| s == m)
-        })
-        .collect();
-    missing.sort_by_key(|r| r.line);
-    if let Some(region) = missing.first() {
-        return Err(Error::new(
-            region.line,
-            format!(
-                "{} cannot be drawn: in mmd's approximate layout of {n} sets those sets \
-                 share no region of their own (see DESIGN.md)",
-                region.what
-            ),
-        ));
-    }
+    // A region the source names should come out in the drawing. Up to five
+    // sets it always does; beyond that, one the circles could not form is
+    // listed beneath the diagram rather than dropped.
+    let missing = missing(&regions, &samples);
 
     // Placed text, relative to the origin, to measure the extent.
     let line_height = measure.line_height(FONT_SIZE);
     let ascent = measure.ascent(FONT_SIZE);
     let mut texts = Vec::new();
     let mut text_regions = Vec::new();
-    for region in regions.iter().filter(|r| !r.lines.is_empty()) {
+    let drawn = |i: &usize| !missing.contains(i);
+    for region in (0..regions.len())
+        .filter(drawn)
+        .map(|i| &regions[i])
+        .filter(|r| !r.lines.is_empty())
+    {
         let block_w = region
             .lines
             .iter()
@@ -391,6 +354,49 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
                 backed: false,
             });
             text_regions.push(mask_of(&region.sets));
+            top += line_height;
+        }
+    }
+
+    // The regions that could not be drawn, as a list well clear beneath the
+    // diagram: a heading, then `A ∩ C: label` per line.
+    if !missing.is_empty() {
+        let names = |sets: &[usize]| {
+            sets.iter()
+                .map(|&i| venn.sets[i].name())
+                .collect::<Vec<_>>()
+                .join(" ∩ ")
+        };
+        let mut entries = vec![(
+            TextLine::new(LIST_HEADING, Font::Bold),
+            Paint::Role(Role::Muted),
+        )];
+        for region in missing.iter().map(|&i| &regions[i]) {
+            let name = names(&region.sets);
+            if region.lines.is_empty() {
+                entries.push((
+                    TextLine::new(name.clone(), Font::Body),
+                    Paint::Role(Role::Text),
+                ));
+            }
+            for (line, paint) in &region.lines {
+                let text = format!("{name}: {}", line.plain());
+                entries.push((TextLine::new(text, Font::Body), *paint));
+            }
+        }
+        let left = extent.x;
+        let mut top = extent.y + extent.height + PADDING * 1.5;
+        for (line, paint) in entries {
+            let width = diagram_scene::line_width(measure, &line, FONT_SIZE);
+            extent = extent.union(&Rect::new(left, top, width, line_height));
+            texts.push(Text {
+                pos: Point::new(left, top + ascent),
+                anchor: Anchor::Start,
+                line,
+                paint,
+                backed: false,
+            });
+            text_regions.push(0);
             top += line_height;
         }
     }
@@ -478,11 +484,125 @@ fn four_ellipses() -> Vec<Outline> {
     .collect()
 }
 
-/// Circle centres for five or more sets: start on a ring, then relax for a
-/// fixed number of rounds so that sets which share a named region overlap
-/// (and those sharing a region of three or more crowd one point) while the
-/// rest keep at least [`GAP`] apart. Deterministic.
-fn euler(venn: &Venn, radii: &[f32]) -> Vec<Point> {
+/// Grünbaum's symmetric Venn diagram of five congruent ellipses, turned
+/// 72° apart about a common centre and each set off it, so that all 31
+/// regions exist. The proportions were searched for the largest smallest
+/// region; `five_ellipses_have_all_thirty_one_regions` checks them.
+fn five_ellipses() -> Vec<Outline> {
+    let a = FIVE_SCALE;
+    let (b, offset, tilt) = (0.62 * a, 0.20 * a, 0.38);
+    (0..5)
+        .map(|i| {
+            let phi = TAU * i as f32 / 5.0 - FRAC_PI_2;
+            Outline::Ellipse {
+                c: Point::new(offset * phi.cos(), offset * phi.sin()),
+                a,
+                b,
+                theta: phi + tilt,
+            }
+        })
+        .collect()
+}
+
+/// Sample a picture on the placement grid: its extent, and each covered
+/// point with the sets it lies in.
+fn sample(outlines: &[Outline]) -> (Rect, Vec<(Point, u64)>) {
+    let mut extent = outlines[0].bbox();
+    for o in &outlines[1..] {
+        extent = extent.union(&o.bbox());
+    }
+    let mut samples: Vec<(Point, u64)> = Vec::new();
+    let mut y = extent.y;
+    while y <= extent.y + extent.height {
+        let mut x = extent.x;
+        while x <= extent.x + extent.width {
+            let p = Point::new(x, y);
+            let m = mask_at(outlines, p);
+            if m != 0 {
+                samples.push((p, m));
+            }
+            x += STEP;
+        }
+        y += STEP;
+    }
+    (extent, samples)
+}
+
+/// The indices of the named regions the samples never land in, in source
+/// order.
+fn missing(regions: &[Region], samples: &[(Point, u64)]) -> Vec<usize> {
+    let mut out: Vec<usize> = (0..regions.len())
+        .filter(|&i| {
+            let m = mask_of(&regions[i].sets);
+            !samples.iter().any(|&(_, s)| s == m)
+        })
+        .collect();
+    out.sort_by_key(|&i| regions[i].line);
+    out
+}
+
+/// Outlines for five or more sets. Euler circles, which keep sets that
+/// share nothing apart, when some deterministic attempt forms every named
+/// region; otherwise, for five sets, the five-ellipse Venn diagram, and for
+/// more, the attempt that forms the most (the rest are listed beneath).
+fn many(venn: &Venn, radii: &[f32], regions: &[Region]) -> Vec<Outline> {
+    let circles = |centers: Vec<Point>| -> Vec<Outline> {
+        centers
+            .into_iter()
+            .zip(radii)
+            .map(|(c, &r)| Outline::Circle { c, r })
+            .collect()
+    };
+    let lost = |outlines: &[Outline]| missing(regions, &sample(outlines).1);
+
+    let first = circles(euler(venn, radii, Start::Ring, 800, &[]));
+    let failing = lost(&first);
+    if failing.is_empty() {
+        return first;
+    }
+    // Try harder: more rounds, the failing regions' sets pulled together,
+    // from the plain ring, a ring ordered so overlapping sets sit side by
+    // side, and a tight cluster.
+    let pull: Vec<Vec<usize>> = failing.iter().map(|&i| regions[i].sets.clone()).collect();
+    let mut best = (failing.len(), first);
+    for start in [Start::Ring, Start::Ordered, Start::Cluster] {
+        let outlines = circles(euler(venn, radii, start, 2400, &pull));
+        let count = lost(&outlines).len();
+        if count == 0 {
+            return outlines;
+        }
+        if count < best.0 {
+            best = (count, outlines);
+        }
+    }
+    if radii.len() == 5 {
+        return five_ellipses();
+    }
+    best.1
+}
+
+/// Where the circle relaxation starts.
+#[derive(Debug, Clone, Copy)]
+enum Start {
+    /// Evenly round a ring, in source order.
+    Ring,
+    /// Round a ring, ordered so each set sits next to one it overlaps.
+    Ordered,
+    /// Round a ring a third the size, so overlaps start out formed.
+    Cluster,
+}
+
+/// Circle centres for five or more sets: start on a ring, then relax for
+/// `rounds` so that sets which share a named region overlap (and those
+/// sharing a region of three or more, or in `pull`, crowd one point) while
+/// the rest keep at least [`GAP`] apart. Deterministic.
+fn euler(
+    venn: &Venn,
+    radii: &[f32],
+    start: Start,
+    rounds: usize,
+    pull: &[Vec<usize>],
+) -> Vec<Point> {
     let n = radii.len();
     let named: Vec<&[usize]> = venn
         .unions
@@ -499,7 +619,12 @@ fn euler(venn: &Venn, radii: &[f32]) -> Vec<Point> {
             }
         }
     }
-    let crowds: Vec<&[usize]> = named.iter().copied().filter(|s| s.len() >= 3).collect();
+    let crowds: Vec<&[usize]> = named
+        .iter()
+        .copied()
+        .filter(|s| s.len() >= 3)
+        .chain(pull.iter().map(|s| &s[..]))
+        .collect();
 
     let rmax = radii.iter().copied().fold(0.0_f32, f32::max);
     let ring = rmax * n as f32 / PI * 1.2;
@@ -507,14 +632,46 @@ fn euler(venn: &Venn, radii: &[f32]) -> Vec<Point> {
         let t = TAU * i as f32 / n as f32 - FRAC_PI_2;
         Point::new(t.cos(), t.sin())
     };
+    // Each set's slot round the ring.
+    let slot: Vec<usize> = match start {
+        Start::Ring | Start::Cluster => (0..n).collect(),
+        Start::Ordered => {
+            // Greedy walk: from set 0, always on to the unvisited set it
+            // overlaps most (then the lowest index).
+            let degree = |i: usize, j: usize| {
+                named
+                    .iter()
+                    .filter(|s| s.contains(&i) && s.contains(&j))
+                    .count()
+            };
+            let mut order = vec![0];
+            while order.len() < n {
+                let last = *order.last().unwrap_or(&0);
+                let next = (0..n)
+                    .filter(|j| !order.contains(j))
+                    .max_by_key(|&j| (degree(last, j), std::cmp::Reverse(j)))
+                    .unwrap_or(0);
+                order.push(next);
+            }
+            let mut slot = vec![0; n];
+            for (k, &i) in order.iter().enumerate() {
+                slot[i] = k;
+            }
+            slot
+        }
+    };
+    let ring = match start {
+        Start::Cluster => ring / 3.0,
+        _ => ring,
+    };
     let mut centers: Vec<Point> = (0..n)
         .map(|i| {
-            let d = direction(i);
+            let d = direction(slot[i]);
             Point::new(d.x * ring, d.y * ring)
         })
         .collect();
 
-    for _ in 0..800 {
+    for _ in 0..rounds {
         let mut moves = vec![Point::new(0.0, 0.0); n];
         for i in 0..n {
             for j in i + 1..n {
@@ -620,11 +777,23 @@ mod tests {
             assert!(texts.iter().any(|t| t == set.name()), "{}", set.name());
         }
         for text in &venn.texts {
-            assert!(texts.iter().any(|t| t == text.name()), "{}", text.name());
+            let listed = format!(": {}", text.name());
+            assert!(
+                texts
+                    .iter()
+                    .any(|t| t == text.name() || t.ends_with(&listed)),
+                "{}",
+                text.name()
+            );
         }
+        // A label is placed, or listed beneath as `A ∩ B: label`.
         for union in &venn.unions {
             if let Some(label) = &union.label {
-                assert!(texts.contains(label), "{label}");
+                let listed = format!(": {label}");
+                assert!(
+                    texts.contains(label) || texts.iter().any(|t| t.ends_with(&listed)),
+                    "{label}"
+                );
             }
         }
         assert_eq!(scene.nodes.len() + scene.edges.len(), venn.sets.len());
@@ -634,8 +803,18 @@ mod tests {
         }
         // Each line's middle sits in exactly its region.
         let middle = Estimate.line_height(FONT_SIZE) / 2.0 - Estimate.ascent(FONT_SIZE);
+        // The not-drawn list sits below every outline.
+        let bottom = arranged
+            .outlines
+            .iter()
+            .map(|o| o.bbox().y + o.bbox().height)
+            .fold(f32::MIN, f32::max);
         for (text, &want) in scene.texts.iter().zip(&arranged.regions) {
             assert!(bounds.contains(text.pos), "{text:?}");
+            if want == 0 {
+                assert!(text.pos.y - Estimate.ascent(FONT_SIZE) > bottom, "{text:?}");
+                continue;
+            }
             let p = text.pos.offset(0.0, middle);
             assert_eq!(
                 mask_at(&arranged.outlines, p),
@@ -750,17 +929,113 @@ mod tests {
         assert_eq!(a, b);
     }
 
+    /// Every pair of `n` sets, as `union` lines labelled `p<i><j>`.
+    fn every_pair(n: usize) -> String {
+        let mut out = String::from("venn-beta\n");
+        for i in 0..n {
+            out.push_str(&format!(" set S{i}\n"));
+        }
+        for i in 0..n {
+            for j in i + 1..n {
+                out.push_str(&format!(" union S{i},S{j}[\"p{i}{j}\"]\n"));
+            }
+        }
+        out
+    }
+
+    /// The scene's lines in the not-drawn list, after its heading.
+    fn listed(arranged: &Arranged) -> Vec<String> {
+        let texts: Vec<String> = arranged
+            .scene
+            .texts
+            .iter()
+            .map(|t| t.line.plain())
+            .collect();
+        match texts.iter().position(|t| t == LIST_HEADING) {
+            Some(at) => texts[at + 1..].to_vec(),
+            None => Vec::new(),
+        }
+    }
+
     #[test]
-    fn a_union_the_layout_cannot_show_is_an_error_naming_it() {
-        // Every one of 31 regions of five sets: circles cannot draw them all.
-        let venn = parse(&every_union(5)).unwrap();
-        let error = arrange(&venn, &Estimate).err().expect("an error");
-        assert!(error.line > 6, "{error:?}");
-        assert!(error.message.contains("`union S"), "{}", error.message);
-        assert!(
-            error.message.contains("cannot be drawn"),
-            "{}",
-            error.message
+    fn five_ellipses_have_all_thirty_one_regions() {
+        let outlines = five_ellipses();
+        let (_, samples) = sample(&outlines);
+        let mut seen = [0usize; 32];
+        for &(_, m) in &samples {
+            seen[m as usize] += 1;
+        }
+        for (m, &count) in seen.iter().enumerate().skip(1) {
+            // At least a 15 × 15 px patch of every region.
+            assert!(
+                count as f32 * STEP * STEP > 225.0,
+                "region {m:05b}: {count}"
+            );
+        }
+        // And every region labelled, each in its place.
+        let arranged = check(&every_union(5));
+        assert_eq!(arranged.scene.edges.len(), 5);
+        assert!(listed(&arranged).is_empty());
+        let mut regions = arranged.regions.clone();
+        regions.sort_unstable();
+        regions.dedup();
+        assert_eq!(regions.len(), 31);
+    }
+
+    #[test]
+    fn five_sets_meeting_pairwise_use_the_ellipses() {
+        let arranged = check(&every_pair(5));
+        assert_eq!(arranged.scene.edges.len(), 5);
+        assert!(listed(&arranged).is_empty());
+    }
+
+    #[test]
+    fn five_sets_the_circles_can_draw_stay_circles() {
+        let arranged = check(
+            "venn-beta\n set A\n set B\n set C\n set D\n set E\n union A,B[AB]\n\
+             union A,B,C[ABC]\n",
         );
+        assert_eq!(arranged.scene.nodes.len(), 5);
+        assert!(listed(&arranged).is_empty());
+    }
+
+    #[test]
+    fn six_sets_list_the_regions_circles_cannot_form() {
+        let source = every_pair(6);
+        let arranged = check(&source);
+        let list = listed(&arranged);
+        assert!(
+            !list.is_empty(),
+            "every pair of six circles is not drawable"
+        );
+        // Every listed entry is a region the circles really lack.
+        let (_, samples) = sample(&arranged.outlines);
+        for entry in &list {
+            let (names, _) = entry.split_once(": ").expect("`A ∩ B: label`");
+            let sets: Vec<usize> = names
+                .split(" ∩ ")
+                .map(|name| name.trim_start_matches('S').parse().unwrap())
+                .collect();
+            let m = mask_of(&sets);
+            assert!(!samples.iter().any(|&(_, s)| s == m), "{entry}");
+        }
+        // And every drawable one is drawn, not listed.
+        let venn = parse(&source).unwrap();
+        for union in &venn.unions {
+            let m = mask_of(&union.sets);
+            let label = union.label.clone().unwrap();
+            let in_list = list.iter().any(|e| e.ends_with(&format!(": {label}")));
+            assert_eq!(in_list, !samples.iter().any(|&(_, s)| s == m), "{label}");
+        }
+    }
+
+    #[test]
+    fn six_sets_without_conflicts_need_no_list() {
+        let arranged = check(
+            "venn-beta\n set A\n set B\n set C\n set D\n set E\n set F\n union A,B[AB]\n\
+             union C,D[CD]\n union E,F[EF]\n union A,F[AF]\n",
+        );
+        assert!(listed(&arranged).is_empty());
+        assert_eq!(arranged.scene.nodes.len(), 6);
     }
 }

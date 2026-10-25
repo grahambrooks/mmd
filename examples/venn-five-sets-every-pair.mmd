@@ -1,0 +1,19 @@
+%% showcase: venn-beta with five sets, every pair intersecting
+%% prose: Circles cannot give every pair of five sets a region of its own, so when the relaxed circles miss a named region, five sets switch to Grünbaum's symmetric Venn diagram: five congruent ellipses turned 72° apart, in which all 31 regions exist. Each label sits in exactly the sets it names.
+%% approx: The five ellipses draw every region whether or not the source names it, and sets that share nothing are not kept apart as they are when circles suffice; venn.js would size the regions by area instead.
+venn-beta
+    set A
+    set B
+    set C
+    set D
+    set E
+    union A,B
+    union A,C
+    union A,D
+    union A,E
+    union B,C
+    union B,D
+    union B,E
+    union C,D
+    union C,E
+    union D,E
