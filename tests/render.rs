@@ -226,3 +226,47 @@ fn flowcharts_flow_in_their_direction() {
         assert!(check(r("A"), r("B")) && check(r("B"), r("C")), "{dir}");
     }
 }
+
+#[test]
+fn flowchart_v11_shapes_link_styles_and_styled_subgraphs_reach_the_scene() {
+    let scene = mmd::flowchart::scene(FLOWCHART, &fonts()).unwrap();
+    let pdf = scene.node("pdf").unwrap();
+    assert_eq!(pdf.shape, mmd::scene::Shape::Document);
+    assert_eq!(pdf.label[0].plain(), "PDF via md2pdf");
+    assert!(
+        pdf.label[0]
+            .runs
+            .iter()
+            .any(|r| r.font == mmd::scene::Font::Bold)
+    );
+    assert_eq!(
+        scene.edges[2].pen.paint,
+        mmd::scene::Paint::Rgb(0xb8, 0x86, 0x0b)
+    );
+    assert_eq!(
+        scene.containers[0].style.fill,
+        mmd::scene::Paint::Rgb(0xee, 0xf4, 0xfb)
+    );
+}
+
+#[test]
+fn flowchart_out_of_subset_fails_with_a_line_number() {
+    for (source, line, names) in [
+        ("flowchart TD\n  A@{ shape: bolt }\n", 2, "bolt"),
+        (
+            "flowchart TD\n  A --> B\n  linkStyle 5 stroke:#f00\n",
+            3,
+            "link 5",
+        ),
+        ("flowchart TD\n  A\n  click Z cb\n", 3, "`Z`"),
+        (
+            "flowchart TD\n  subgraph s\n    A\n  end\n  B --> s\n",
+            5,
+            "subgraph",
+        ),
+    ] {
+        let error = mmd::render(source).unwrap_err();
+        assert_eq!(error.line, line, "{source}");
+        assert!(error.message.contains(names), "{error}");
+    }
+}

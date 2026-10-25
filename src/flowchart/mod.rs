@@ -3,7 +3,10 @@
 mod layout;
 mod parse;
 
-pub use parse::{Direction, Flowchart, Link, Node, NodeShape, Subgraph, parse};
+pub use parse::{
+    Colors, Direction, End, Flowchart, LineKind, Link, LinkStyle, Node, NodeShape, Stroke,
+    Subgraph, parse,
+};
 
 use diagram_scene::Scene;
 
