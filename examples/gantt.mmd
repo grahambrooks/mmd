@@ -1,0 +1,21 @@
+%% showcase: gantt with dependencies and milestones
+%% prose: Tasks chain with `after` and end with `until`; the freeze is a milestone diamond and the critical path is drawn in red. Done work is greyed, active work hollow, and each section shades its band and colours its bars.
+%% approx: Bars take their section's colour; mermaid colours every task alike and tints the section bands instead.
+%% approx: The chart is a fixed 640 px wide rather than the width of the page it is embedded in, so ticks are chosen for that width.
+gantt
+    title mmd 1.0 release
+    dateFormat YYYY-MM-DD
+    axisFormat %b %d
+    section Parsers
+    Grammar review        :done,    g1, 2026-01-05, 5d
+    Gantt parser          :done,    g2, after g1, 6d
+    Timeline and journey  :active,  g3, after g2, 8d
+    section Layout
+    Date axis             :active,  l1, after g2, 5d
+    Faces and legends     :         l2, after l1, 4d
+    Kanban cards          :         l3, after l2, 3d
+    section Release
+    Feature freeze        :milestone, crit, m1, after g3 l3, 0d
+    Showcase review       :crit,    r1, after m1, 3d
+    Docs                  :         r2, after m1, until ship
+    Ship                  :milestone, ship, 2026-02-09, 0d

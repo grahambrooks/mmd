@@ -1,0 +1,22 @@
+%% showcase: kanban board
+%% prose: Columns come from indentation and cards sit beneath them; a card's metadata shows its ticket (left) and assignee (right), and its priority as the coloured stripe down its left edge.
+%% approx: Priority stripes use the theme's series colours rather than mermaid's fixed red, orange and blues.
+%% approx: Columns are a fixed 200 px wide and all as tall as the longest.
+kanban
+  todo[To do]
+    t1[Sequence diagrams]@{ ticket: MMD-41, assigned: graham, priority: 'Very High' }
+    t2[Pie charts]@{ ticket: MMD-44, priority: 'Low' }
+    t3[Mindmap layout with a tidy tree]
+  doing[In progress]
+    d1[Gantt date axis]@{
+      ticket: MMD-38
+      assigned: claude
+      priority: 'High'
+    }
+    d2[Kanban cards]@{ assigned: claude }
+  review[Review]
+    r1[ER diagrams]@{ ticket: MMD-30, priority: 'Very Low' }
+  done[Done]
+    x1[Flowcharts]
+    x2[gitGraph]
+    x3[C4 context]

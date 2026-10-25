@@ -1,0 +1,15 @@
+%% showcase: user journey
+%% prose: Each task sits under its section; dots on its top edge show who takes part (see the legend), and its face sits higher, greener and happier the better the task's score out of 5.
+%% approx: Faces are outlined rather than filled yellow, and coloured by score (green, amber, red).
+%% approx: Actor dots sit on the task box's top edge; mermaid draws them as larger circles just above it.
+journey
+    title Publishing a document with diagrams
+    section Write
+      Draft the text: 5: Author
+      Sketch a flowchart: 4: Author
+    section Render
+      Convert to PDF: 3: Author, CI
+      Diagrams lose their labels: 1: Author, Reader
+    section Fix
+      Switch to mmd: 4: Author, CI
+      Read the PDF: 5: Reader
