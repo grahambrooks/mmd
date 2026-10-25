@@ -1,0 +1,24 @@
+%% showcase: zenuml
+%% prose: ZenUML is mermaid's external plugin (`@mermaid-js/mermaid-zenuml`) with a code-like sequence syntax. mmd parses it into its own sequence model: a call `A.method(args)` is a solid arrow that activates its callee for the `{ … }` block, an assignment `x = A.method()` or `return x` is a dashed reply, `new A()` creates a participant where the message arrives, and annotators like `@Actor` and `@Database` pick the participant's shape. A group boxes its participants and a `//` comment above a message becomes a note over it.
+%% approx: Drawn with mmd's sequence layout and look, not ZenUML's own renderer: participant heads are mirrored at the foot and fragments use mermaid's corner-tab frames.
+%% approx: Cloud annotators such as `@EC2` have no icon; the participant is a plain box with the annotator as a «stereotype» line.
+%% approx: Comments keep their Markdown as written rather than rendering it.
+%% approx: Creation messages read «create»(arguments).
+zenuml
+    title Borrowing a book
+    @Actor Member
+    group Library {
+      @Boundary BookLibService as "Book service"
+      @Database BookRepository
+    }
+    @EC2 Mailer
+    // The member asks to borrow a book by id.
+    Member->BookLibService.Borrow(id) {
+      User = Session.GetUser()
+      if(User.isActive) {
+        BookRepository.Update(id, onLoan, User)
+        receipt = new Receipt(id, dueDate)
+        BookLibService->Mailer: send receipt
+      }
+      return receipt
+    }
