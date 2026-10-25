@@ -1,0 +1,73 @@
+src/mindmap/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-279
+src/flowchart/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 707
+src/meta.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-159
+src/mindmap/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-18
+src/treemap/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-18
+src/packet/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-141
+src/ishikawa/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-125
+src/treemap/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-318
+src/mindmap/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-269
+src/treeview/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-123
+src/treeview/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-18
+examples/mindmap.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-27
+src/block/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-505
+src/block/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-18
+src/ishikawa/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-18
+examples/ishikawa.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-21
+examples/packet.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-22
+src/lib.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 15,24,28-30,41-42,80-85,113-118,145-150,165-168,277-282
+src/ishikawa/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-336
+examples/block.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-20
+src/treeview/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-109
+examples/treeview.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-17
+src/block/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-1070
+src/packet/layout.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-228
+examples/treemap.mmd
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-19
+src/flowchart/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 6-9
+src/treemap/parse.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-201
+src/packet/mod.rs
+  s_0c7b5d39344b95::t_a4876212c8a61d 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63e6a7b94fb1272236fafac19acc605c2836a6d7",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
