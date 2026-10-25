@@ -1,0 +1,34 @@
+CLAUDE.md
+  s_0c7b5d39344b95::t_cda3295f1e5558 32-37,55-62,65-80,85,88-89,95-96,106-109,117-120
+README.md
+  s_0c7b5d39344b95::t_a1b711b598212a 7-11,57,59-73,80
+  s_0c7b5d39344b95::t_89c2bccab538ed 89
+Makefile
+  s_0c7b5d39344b95::t_4d54edfcb46f57 1,21-22,60-61
+  s_0c7b5d39344b95::t_4144a9706ab12d 62
+scripts/showcase-pages.swift
+  s_0c7b5d39344b95::t_4d54edfcb46f57 1-20
+DESIGN.md
+  s_0c7b5d39344b95::t_83849a8b852a69 48-57,72-74,76-82,90-102,146-147,153-156,161,172-177,208-228,261-265,286-287,298-299,302
+  s_0c7b5d39344b95::t_d917cf428904c8 540-548,559-567,604-616,618-655,661-669
+  s_0c7b5d39344b95::t_c20845a501b8b4 65-68
+  s_0c7b5d39344b95::t_e10d10616d8cfc 383-522
+skills/render-mermaid/SKILL.md
+  s_0c7b5d39344b95::t_586892c9d245e9 3,16,27-30,43,45-46,48-74,76-110,113,117-124,126-128,130,132-133,138,141-144,151-152,164-167,169-170,173,176-181,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e32b136926f01aa20b3a4dd6fe9fa7edb8fe51c",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
