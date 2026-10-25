@@ -1,0 +1,17 @@
+%% showcase: gantt dateFormat with ISO week dates
+%% prose: Dates are written as ISO 8601 week dates: `GGGG-[W]WW-E` reads `2026-W02-1` as the Monday of week 2, 5 January 2026. Week 1 is the week holding 4 January, so `2026-W01-1` falls on 29 December 2025. The locale tokens `gggg`, `ww` and `e` count Sunday-based weeks instead, and `YYYY-DDDD` reads a day of the year.
+%% approx: mmd parses moment's week-date, day-of-year and `k` hour tokens; mermaid parses dates with dayjs, which cannot, so mermaid rejects this chart.
+gantt
+    title Release train
+    dateFormat GGGG-[W]WW-E
+    axisFormat %G-W%V
+    tickInterval 1week
+    weekday monday
+    section Plan
+    Kickoff        :k1, 2026-W01-1, 3d
+    Scope          :s1, 2026-W01-4, 1w
+    section Build
+    Sprint 1       :b1, 2026-W02-4, 2w
+    Sprint 2       :b2, after b1, 2w
+    section Ship
+    Release        :milestone, m1, 2026-W07-5, 0d
