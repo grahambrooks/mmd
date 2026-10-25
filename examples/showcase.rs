@@ -485,8 +485,14 @@ fn error_card(source: &str, error: &mmd::Error, color: (u8, u8, u8)) -> String {
     }
     let mut wrapped = Vec::new();
     for (line, error) in lines {
-        let limit = if error { 82 } else { 86 };
-        for (n, part) in wrap_hard(&line, limit).into_iter().enumerate() {
+        // Prose wraps at words; source wraps where it must, keeping its
+        // indentation visible.
+        let parts = if error {
+            wrap(&line, 82)
+        } else {
+            wrap_hard(&line, 86)
+        };
+        for (n, part) in parts.into_iter().enumerate() {
             wrapped.push((if n == 0 { part } else { format!("    {part}") }, error));
         }
     }

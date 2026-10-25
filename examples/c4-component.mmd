@@ -1,0 +1,19 @@
+%% showcase: C4Component inside one container
+%% prose: The API container opened up: its components sit inside a container boundary, with the database and the queue it talks to outside. Component technology shows in brackets under the name.
+%% approx: Placement is declaration order; related elements can land far apart.
+%% approx: Relation labels are placed at curve midpoints, so two curves crossing between rows can crowd their pills together (Reads and writes / Queues large renders).
+C4Component
+    title Components of the API
+    Container(web, "Editor", "TypeScript", "Runs in the browser")
+    Container_Boundary(api, "API") {
+        Component(routes, "Routes", "axum", "Maps requests to handlers")
+        Component(render, "Render service", "Rust", "Turns sources into SVG")
+        Component(store, "Document repository", "sqlx", "Reads and writes documents")
+    }
+    ContainerDb(db, "Document store", "Postgres")
+    ContainerQueue(jobs, "Render jobs", "SQS")
+    Rel(web, routes, "Calls", "JSON/HTTPS")
+    Rel(routes, render, "Renders with")
+    Rel(routes, store, "Loads and saves with")
+    Rel(store, db, "Reads and writes", "SQL")
+    Rel(render, jobs, "Queues large renders")
