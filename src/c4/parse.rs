@@ -2,8 +2,12 @@
 //!
 //! Grammar subset per `DESIGN.md`, checked against mermaid's
 //! `packages/mermaid/src/diagrams/c4/parser/c4Diagram.jison` and the
-//! argument handling in `c4Db.js`.
+//! argument handling in `c4Db.js`. A few C4-PlantUML statements mermaid's
+//! grammar lacks (`AddElementTag`, `AddRelTag`, `UpdateBoundaryStyle`,
+//! `SHOW_LEGEND()`, …) are accepted too, because real diagrams carry them.
 
+use crate::style::color;
+pub use crate::style::{Colors, Rgb};
 use crate::{Error, strip_comment};
 
 /// Which C4 view the header names. The view does not restrict which
@@ -14,6 +18,9 @@ pub enum View {
     Context,
     Container,
     Component,
+    /// Relations are numbered in the order they are declared.
+    Dynamic,
+    Deployment,
 }
 
 /// The C4 abstraction an element belongs to.
@@ -158,6 +165,54 @@ impl ElementKind {
     }
 }
 
+/// The colours and outline a style statement or tag gives an element or
+/// boundary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ElementStyle {
+    /// `bgColor`, `borderColor`, `fontColor`, and a dashed `borderStyle`.
+    pub colors: Colors,
+    /// `$shape="EightSidedShape()"`.
+    pub octagon: bool,
+}
+
+impl ElementStyle {
+    fn merge(&mut self, other: &ElementStyle) {
+        self.colors.merge(&other.colors);
+        self.octagon |= other.octagon;
+    }
+}
+
+/// How a relation's line is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineStyle {
+    Solid,
+    Dashed,
+    Dotted,
+    Bold,
+}
+
+/// What `UpdateRelStyle` and relation tags set.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RelStyle {
+    pub line_color: Option<Rgb>,
+    /// `textColor`. Parsed and kept, but the scene has no per-label colour.
+    pub text_color: Option<Rgb>,
+    pub line: Option<LineStyle>,
+    /// `offsetX`/`offsetY`: where the label moves from the curve's middle.
+    pub offset: (f32, f32),
+}
+
+impl RelStyle {
+    fn merge(&mut self, other: &RelStyle) {
+        self.line_color = other.line_color.or(self.line_color);
+        self.text_color = other.text_color.or(self.text_color);
+        self.line = other.line.or(self.line);
+        if other.offset != (0.0, 0.0) {
+            self.offset = other.offset;
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Element {
     pub alias: String,
@@ -169,6 +224,14 @@ pub struct Element {
     /// The boundary it was declared in, as an index into
     /// [`C4::boundaries`].
     pub boundary: Option<usize>,
+    /// `$tags`, split on `+`.
+    pub tags: Vec<String>,
+    /// `$sprite`: kept, not drawn (icons are out of scope).
+    pub sprite: Option<String>,
+    /// `$link`: kept, not drawn (a static SVG has no click target).
+    pub link: Option<String>,
+    /// From its tags, then `UpdateElementStyle`.
+    pub style: ElementStyle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -178,6 +241,8 @@ pub enum BoundaryKind {
     Enterprise,
     System,
     Container,
+    /// `Deployment_Node`, `Node`, `Node_L` or `Node_R`: a solid box.
+    Node,
 }
 
 #[derive(Debug, Clone)]
@@ -187,9 +252,14 @@ pub struct Boundary {
     pub kind: BoundaryKind,
     /// Shown under the label as `[type]`, as mermaid does.
     pub type_label: String,
+    /// Deployment nodes only.
+    pub description: Option<String>,
     /// The enclosing boundary, as an index into [`C4::boundaries`]. A
     /// parent always has a lower index than its children.
     pub parent: Option<usize>,
+    pub tags: Vec<String>,
+    pub link: Option<String>,
+    pub style: ElementStyle,
 }
 
 /// Which ends of a relation carry an arrowhead.
@@ -221,19 +291,43 @@ pub struct Relation {
     pub description: Option<String>,
     pub arrows: Arrows,
     pub direction: Option<Direction>,
+    pub tags: Vec<String>,
+    pub sprite: Option<String>,
+    pub link: Option<String>,
+    /// From its tags, then `UpdateRelStyle`.
+    pub style: RelStyle,
+}
+
+/// An `AddElementTag`/`AddRelTag`/`AddBoundaryTag` definition.
+#[derive(Debug, Clone, Default)]
+pub struct Tag {
+    pub name: String,
+    pub element: ElementStyle,
+    pub relation: RelStyle,
+    /// `$techn`, shown on an element that has no technology of its own.
+    pub technology: Option<String>,
+    /// `$legendText`, the tag's entry in the legend.
+    pub legend: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct C4 {
     pub view: View,
     pub title: Option<String>,
+    /// `accDescr`; stored, not drawn.
+    pub acc_descr: Option<String>,
     pub elements: Vec<Element>,
     pub boundaries: Vec<Boundary>,
     pub relations: Vec<Relation>,
+    pub tags: Vec<Tag>,
     /// Elements per grid row (`UpdateLayoutConfig`'s `c4ShapeInRow`).
     pub shapes_per_row: usize,
     /// Boundaries per row (`c4BoundaryInRow`).
     pub boundaries_per_row: usize,
+    /// `SHOW_LEGEND()` or `LAYOUT_WITH_LEGEND()`.
+    pub legend: bool,
+    /// `HIDE_STEREOTYPE()`: no «Person»/«Container» line on elements.
+    pub hide_stereotype: bool,
 }
 
 impl Default for C4 {
@@ -241,28 +335,20 @@ impl Default for C4 {
         C4 {
             view: View::default(),
             title: None,
+            acc_descr: None,
             elements: Vec::new(),
             boundaries: Vec::new(),
             relations: Vec::new(),
+            tags: Vec::new(),
             // Mermaid's default is 4; 3 keeps a diagram legible at the width
             // of a printed page.
             shapes_per_row: 3,
             boundaries_per_row: 2,
+            legend: false,
+            hide_stereotype: false,
         }
     }
 }
-
-/// Names mermaid accepts but this crate does not, reported by name so the
-/// error says what is missing rather than just "unexpected".
-const UNSUPPORTED: &[&str] = &[
-    "Deployment_Node",
-    "Node",
-    "Node_L",
-    "Node_R",
-    "RelIndex",
-    "UpdateElementStyle",
-    "UpdateRelStyle",
-];
 
 /// One argument of a `Name(...)` call.
 #[derive(Debug, Clone, PartialEq)]
@@ -283,20 +369,78 @@ struct PendingRel {
     description: Option<String>,
     arrows: Arrows,
     direction: Option<Direction>,
+    tags: Vec<String>,
+    sprite: Option<String>,
+    link: Option<String>,
 }
 
-/// Parse a `C4Context`, `C4Container` or `C4Component` source.
+/// A style statement, applied once everything is declared.
+enum PendingStyle {
+    Element {
+        line: usize,
+        name: String,
+        style: ElementStyle,
+        technology: Option<String>,
+    },
+    /// `UpdateBoundaryStyle`: by alias or by boundary type; `None` for all.
+    Boundary {
+        line: usize,
+        name: Option<String>,
+        style: ElementStyle,
+    },
+    Relation {
+        line: usize,
+        from: String,
+        to: String,
+        style: RelStyle,
+    },
+}
+
+/// C4-PlantUML macros that take no arguments. The `LAYOUT_*` ones only
+/// steer PlantUML's layout engine; they are accepted and do nothing here.
+const LAYOUT_MACROS: &[&str] = &[
+    "LAYOUT_TOP_DOWN",
+    "LAYOUT_LEFT_RIGHT",
+    "LAYOUT_LANDSCAPE",
+    "LAYOUT_AS_SKETCH",
+    "HIDE_PERSON_SPRITE",
+    "SHOW_PERSON_SPRITE",
+    "SHOW_PERSON_OUTLINE",
+    "SHOW_PERSON_PORTRAIT",
+];
+
+/// Parse a `C4Context`, `C4Container`, `C4Component`, `C4Dynamic` or
+/// `C4Deployment` source.
 pub fn parse(source: &str) -> Result<C4, Error> {
     let mut model = C4::default();
     let mut seen_header = false;
     let mut pending: Vec<PendingRel> = Vec::new();
+    let mut styles: Vec<PendingStyle> = Vec::new();
     // Open boundaries, innermost last, with the line that opened each.
     let mut open: Vec<(usize, usize)> = Vec::new();
     // A boundary whose `{` is expected on the next line.
     let mut awaiting_brace: Option<(usize, usize)> = None;
+    // An `accDescr {` block still open: its text so far and first line.
+    let mut acc_block: Option<(String, usize)> = None;
 
     for (index, raw) in source.lines().enumerate() {
         let line_number = index + 1;
+
+        if let Some((text, _)) = acc_block.as_mut() {
+            match raw.split_once('}') {
+                Some((last, _)) => {
+                    text.push_str(last.trim());
+                    model.acc_descr = Some(text.trim().to_string());
+                    acc_block = None;
+                }
+                None => {
+                    text.push_str(raw.trim());
+                    text.push('\n');
+                }
+            }
+            continue;
+        }
+
         let line = strip_comment(raw).trim();
         if line.is_empty() {
             continue;
@@ -307,19 +451,13 @@ pub fn parse(source: &str) -> Result<C4, Error> {
                 "C4Context" => View::Context,
                 "C4Container" => View::Container,
                 "C4Component" => View::Component,
-                _ if line.starts_with("C4") => {
-                    return Err(Error::new(
-                        line_number,
-                        format!(
-                            "`{line}` is not supported; only `C4Context`, `C4Container` \
-                             and `C4Component` (see DESIGN.md)"
-                        ),
-                    ));
-                }
+                "C4Dynamic" => View::Dynamic,
+                "C4Deployment" => View::Deployment,
                 _ => {
                     return Err(Error::new(
                         line_number,
-                        "expected `C4Context`, `C4Container` or `C4Component`",
+                        "expected `C4Context`, `C4Container`, `C4Component`, `C4Dynamic` or \
+                         `C4Deployment`",
                     ));
                 }
             };
@@ -352,6 +490,37 @@ pub fn parse(source: &str) -> Result<C4, Error> {
             model.title = Some(title.trim().to_string());
             continue;
         }
+        // Mermaid's C4 grammar sets the drawn title from `accTitle`.
+        if let Some(rest) = line.strip_prefix("accTitle") {
+            let value = rest
+                .trim_start()
+                .strip_prefix(':')
+                .ok_or_else(|| Error::new(line_number, "expected `accTitle: <text>`"))?;
+            model.title = Some(value.trim().to_string());
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("accDescription ") {
+            model.acc_descr = Some(rest.trim().to_string());
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("accDescr") {
+            let rest = rest.trim_start();
+            if let Some(value) = rest.strip_prefix(':') {
+                model.acc_descr = Some(value.trim().to_string());
+                continue;
+            }
+            let Some(body) = rest.strip_prefix('{') else {
+                return Err(Error::new(
+                    line_number,
+                    "expected `accDescr: <text>` or `accDescr { … }`",
+                ));
+            };
+            match body.split_once('}') {
+                Some((inside, _)) => model.acc_descr = Some(inside.trim().to_string()),
+                None => acc_block = Some((format!("{}\n", body.trim()), line_number)),
+            }
+            continue;
+        }
 
         let Some((keyword, args, rest)) = split_call(line) else {
             return Err(Error::new(
@@ -360,29 +529,29 @@ pub fn parse(source: &str) -> Result<C4, Error> {
             ));
         };
         let parent = open.last().map(|&(boundary, _)| boundary);
-
-        if UNSUPPORTED.contains(&keyword) {
-            return Err(Error::new(
-                line_number,
-                format!("`{keyword}` is not supported (see DESIGN.md)"),
-            ));
-        }
-
         let args = split_args(args);
 
         if let Some(boundary_kind) = boundary_keyword(keyword) {
             // `System_Boundary` and friends fix the type themselves; only
-            // the generic `Boundary` takes it as an argument.
-            let (names, kv): (&[&str], &[&str]) = if boundary_kind == BoundaryKind::Generic {
-                (&["alias", "label", "type"], &["type"])
-            } else {
-                (&["alias", "label"], &[])
+            // the generic `Boundary` and deployment nodes take it.
+            let (names, kv): (&[&str], &[&str]) = match boundary_kind {
+                BoundaryKind::Generic => (
+                    &["alias", "label", "type", "tags", "link"],
+                    &["type", "tags", "link"],
+                ),
+                BoundaryKind::Node => (
+                    &["alias", "label", "type", "descr", "sprite", "tags", "link"],
+                    &["type", "descr", "sprite", "tags", "link"],
+                ),
+                _ => (&["alias", "label", "tags", "link"], &["tags", "link"]),
             };
             let fields = fields(keyword, &args, names, kv, line_number)?;
             let [alias, label] = required(keyword, &args, &fields, line_number)?;
             check_new_alias(&model, &alias, line_number)?;
+            let field = |name: &str| field(names, &fields, name);
             let type_label = match boundary_kind {
-                BoundaryKind::Generic => fields[2].clone().unwrap_or_else(|| "system".into()),
+                BoundaryKind::Generic => field("type").unwrap_or_else(|| "system".into()),
+                BoundaryKind::Node => field("type").unwrap_or_else(|| "node".into()),
                 BoundaryKind::Enterprise => "ENTERPRISE".into(),
                 BoundaryKind::System => "SYSTEM".into(),
                 BoundaryKind::Container => "CONTAINER".into(),
@@ -392,7 +561,11 @@ pub fn parse(source: &str) -> Result<C4, Error> {
                 label,
                 kind: boundary_kind,
                 type_label,
+                description: field("descr"),
                 parent,
+                tags: split_tags(field("tags")),
+                link: field("link"),
+                style: ElementStyle::default(),
             });
             let boundary = model.boundaries.len() - 1;
             match rest {
@@ -415,42 +588,200 @@ pub fn parse(source: &str) -> Result<C4, Error> {
             ));
         }
 
-        if keyword == "UpdateLayoutConfig" {
-            let names = ["c4ShapeInRow", "c4BoundaryInRow"];
-            let fields = fields(keyword, &args, &names, &names, line_number)?;
-            for (value, (name, target)) in fields.iter().zip([
-                ("c4ShapeInRow", &mut model.shapes_per_row),
-                ("c4BoundaryInRow", &mut model.boundaries_per_row),
-            ]) {
-                if let Some(value) = value {
-                    *target = value
-                        .parse()
-                        .ok()
-                        .filter(|&n: &usize| n >= 1)
-                        .ok_or_else(|| {
-                            Error::new(
-                                line_number,
-                                format!("`{name}` must be a whole number of at least 1"),
-                            )
-                        })?;
+        match keyword {
+            "UpdateLayoutConfig" => {
+                let names = ["c4ShapeInRow", "c4BoundaryInRow"];
+                let fields = fields(keyword, &args, &names, &names, line_number)?;
+                for (value, (name, target)) in fields.iter().zip([
+                    ("c4ShapeInRow", &mut model.shapes_per_row),
+                    ("c4BoundaryInRow", &mut model.boundaries_per_row),
+                ]) {
+                    if let Some(value) = value {
+                        *target =
+                            value
+                                .parse()
+                                .ok()
+                                .filter(|&n: &usize| n >= 1)
+                                .ok_or_else(|| {
+                                    Error::new(
+                                        line_number,
+                                        format!("`{name}` must be a whole number of at least 1"),
+                                    )
+                                })?;
+                    }
                 }
+                continue;
             }
-            continue;
+            "UpdateElementStyle" | "UpdateBoundaryStyle" => {
+                let names = ELEMENT_STYLE;
+                let fields = fields(keyword, &args, names, names, line_number)?;
+                let field = |name: &str| field(names, &fields, name);
+                let style = element_style(&field, line_number)?;
+                let name = field("elementName");
+                if keyword == "UpdateElementStyle" {
+                    let name = name.ok_or_else(|| {
+                        Error::new(line_number, "`UpdateElementStyle` needs an element alias")
+                    })?;
+                    styles.push(PendingStyle::Element {
+                        line: line_number,
+                        name,
+                        style,
+                        technology: field("techn"),
+                    });
+                } else {
+                    styles.push(PendingStyle::Boundary {
+                        line: line_number,
+                        name,
+                        style,
+                    });
+                }
+                continue;
+            }
+            "UpdateRelStyle" => {
+                let names = [
+                    "from",
+                    "to",
+                    "textColor",
+                    "lineColor",
+                    "offsetX",
+                    "offsetY",
+                    "lineStyle",
+                    "lineThickness",
+                ];
+                let fields = fields(keyword, &args, &names, &names, line_number)?;
+                let field = |name: &str| field(&names, &fields, name);
+                let (Some(from), Some(to)) = (field("from"), field("to")) else {
+                    return Err(Error::new(
+                        line_number,
+                        "`UpdateRelStyle` needs (from, to) at least",
+                    ));
+                };
+                styles.push(PendingStyle::Relation {
+                    line: line_number,
+                    from,
+                    to,
+                    style: rel_style(&field, line_number)?,
+                });
+                continue;
+            }
+            "AddElementTag"
+            | "AddPersonTag"
+            | "AddSystemTag"
+            | "AddContainerTag"
+            | "AddComponentTag"
+            | "AddExternalPersonTag"
+            | "AddExternalSystemTag"
+            | "AddExternalContainerTag"
+            | "AddExternalComponentTag"
+            | "AddNodeTag"
+            | "AddBoundaryTag" => {
+                let mut names = vec!["tagStereo"];
+                names.extend_from_slice(&ELEMENT_STYLE[1..]);
+                let fields = fields(keyword, &args, &names, &names, line_number)?;
+                let field = |name: &str| field(&names, &fields, name);
+                let name = field("tagStereo")
+                    .ok_or_else(|| Error::new(line_number, format!("`{keyword}` needs a tag")))?;
+                let tag = Tag {
+                    name,
+                    element: element_style(&field, line_number)?,
+                    technology: field("techn"),
+                    legend: field("legendText"),
+                    ..Tag::default()
+                };
+                add_tag(&mut model, tag);
+                continue;
+            }
+            "AddRelTag" => {
+                let names = [
+                    "tagStereo",
+                    "textColor",
+                    "lineColor",
+                    "lineStyle",
+                    "sprite",
+                    "techn",
+                    "legendText",
+                    "legendSprite",
+                    "lineThickness",
+                ];
+                let fields = fields(keyword, &args, &names, &names, line_number)?;
+                let field = |name: &str| field(&names, &fields, name);
+                let name = field("tagStereo")
+                    .ok_or_else(|| Error::new(line_number, "`AddRelTag` needs a tag"))?;
+                let tag = Tag {
+                    name,
+                    relation: rel_style(&field, line_number)?,
+                    technology: field("techn"),
+                    legend: field("legendText"),
+                    ..Tag::default()
+                };
+                add_tag(&mut model, tag);
+                continue;
+            }
+            "SHOW_LEGEND"
+            | "LAYOUT_WITH_LEGEND"
+            | "SHOW_FLOATING_LEGEND"
+            | "HIDE_STEREOTYPE"
+            | "SHOW_STEREOTYPE" => {
+                // `SHOW_LEGEND(hideStereotype)` takes an optional flag.
+                if args
+                    .iter()
+                    .any(|a| matches!(a, Arg::Positional(v) if !matches!(v.as_str(), "" | "true" | "false")))
+                {
+                    return Err(Error::new(
+                        line_number,
+                        format!("`{keyword}()` takes no arguments here"),
+                    ));
+                }
+                match keyword {
+                    "HIDE_STEREOTYPE" => model.hide_stereotype = true,
+                    "SHOW_STEREOTYPE" => model.hide_stereotype = false,
+                    _ => model.legend = true,
+                }
+                continue;
+            }
+            _ if LAYOUT_MACROS.contains(&keyword) => {
+                if !args.is_empty() {
+                    return Err(Error::new(
+                        line_number,
+                        format!("`{keyword}()` takes no arguments"),
+                    ));
+                }
+                continue;
+            }
+            _ => {}
         }
 
         if let Some((arrows, direction)) = relation_keyword(keyword) {
-            let names = ["from", "to", "label", "techn", "descr"];
-            let fields = fields(keyword, &args, &names, &["techn", "descr"], line_number)?;
+            let mut args = args;
+            if keyword == "RelIndex" {
+                // Mermaid drops the index and numbers relations in order.
+                let Some(first) = args.iter().position(|a| matches!(a, Arg::Positional(_))) else {
+                    return Err(Error::new(
+                        line_number,
+                        "`RelIndex` needs (index, from, to, \"label\") at least",
+                    ));
+                };
+                args.remove(first);
+            }
+            let names = [
+                "from", "to", "label", "techn", "descr", "sprite", "tags", "link",
+            ];
+            let kv = &names[3..];
+            let fields = fields(keyword, &args, &names, kv, line_number)?;
             let [from, to, label] = required(keyword, &args, &fields, line_number)?;
+            let field = |name: &str| field(&names, &fields, name);
             pending.push(PendingRel {
                 line: line_number,
                 from,
                 to,
                 label,
-                technology: fields[3].clone(),
-                description: fields[4].clone(),
+                technology: field("techn"),
+                description: field("descr"),
                 arrows,
                 direction,
+                tags: split_tags(field("tags")),
+                sprite: field("sprite"),
+                link: field("link"),
             });
             continue;
         }
@@ -461,34 +792,38 @@ pub fn parse(source: &str) -> Result<C4, Error> {
                 format!("unknown element `{keyword}`"),
             ));
         };
-        let (names, kv): (&[&str], &[&str]) = if kind.has_technology() {
-            (&["alias", "label", "techn", "descr"], &["techn", "descr"])
+        let names: &[&str] = if kind.has_technology() {
+            &["alias", "label", "techn", "descr", "sprite", "tags", "link"]
         } else {
-            (&["alias", "label", "descr"], &["descr"])
+            &["alias", "label", "descr", "sprite", "tags", "link"]
         };
+        let kv = &names[2..];
         let fields = fields(keyword, &args, names, kv, line_number)?;
         let [alias, label] = required(keyword, &args, &fields, line_number)?;
         check_new_alias(&model, &alias, line_number)?;
-        let (technology, description) = if kind.has_technology() {
-            (fields[2].clone(), fields[3].clone())
-        } else {
-            (None, fields[2].clone())
-        };
+        let field = |name: &str| field(names, &fields, name);
         model.elements.push(Element {
             alias,
             label,
-            technology,
-            description,
+            technology: field("techn"),
+            description: field("descr"),
             kind,
             boundary: parent,
+            tags: split_tags(field("tags")),
+            sprite: field("sprite"),
+            link: field("link"),
+            style: ElementStyle::default(),
         });
     }
 
     if !seen_header {
         return Err(Error::new(
             1,
-            "expected `C4Context`, `C4Container` or `C4Component`",
+            "expected `C4Context`, `C4Container`, `C4Component`, `C4Dynamic` or `C4Deployment`",
         ));
+    }
+    if let Some((_, line)) = acc_block {
+        return Err(Error::new(line, "`accDescr {` has no closing `}`"));
     }
     if let Some((boundary, line)) = awaiting_brace.or_else(|| open.last().copied()) {
         return Err(Error::new(
@@ -525,10 +860,263 @@ pub fn parse(source: &str) -> Result<C4, Error> {
             description: rel.description,
             arrows: rel.arrows,
             direction: rel.direction,
+            tags: rel.tags,
+            sprite: rel.sprite,
+            link: rel.link,
+            style: RelStyle::default(),
         });
     }
 
+    apply_styles(&mut model, styles)?;
     Ok(model)
+}
+
+/// The arguments `UpdateElementStyle`, `UpdateBoundaryStyle` and the
+/// element tags take, mermaid's first and C4-PlantUML's after.
+const ELEMENT_STYLE: &[&str] = &[
+    "elementName",
+    "bgColor",
+    "fontColor",
+    "borderColor",
+    "shadowing",
+    "shape",
+    "sprite",
+    "techn",
+    "legendText",
+    "legendSprite",
+    "borderStyle",
+    "borderThickness",
+    "type",
+];
+
+/// The value of the field called `name`.
+fn field(names: &[&str], fields: &[Option<String>], name: &str) -> Option<String> {
+    names
+        .iter()
+        .position(|n| *n == name)
+        .and_then(|i| fields[i].clone())
+}
+
+/// `$tags="a+b"`, as tag names.
+fn split_tags(tags: Option<String>) -> Vec<String> {
+    tags.map(|t| {
+        t.split('+')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(String::from)
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// A later definition of a tag replaces an earlier one.
+fn add_tag(model: &mut C4, tag: Tag) {
+    model.tags.retain(|t| t.name != tag.name);
+    model.tags.push(tag);
+}
+
+fn element_style(
+    field: &dyn Fn(&str) -> Option<String>,
+    line: usize,
+) -> Result<ElementStyle, Error> {
+    let mut style = ElementStyle::default();
+    let rgb = |name: &str| field(name).map(|v| color(&v, line)).transpose();
+    style.colors.fill = rgb("bgColor")?;
+    style.colors.stroke = rgb("borderColor")?;
+    style.colors.text = rgb("fontColor")?;
+    if let Some(border) = field("borderStyle") {
+        style.colors.dashed = matches!(
+            line_style(&border, line)?,
+            LineStyle::Dashed | LineStyle::Dotted
+        );
+    }
+    if let Some(shape) = field("shape") {
+        style.octagon = match shape.as_str() {
+            "EightSidedShape()" => true,
+            "RoundedBoxShape()" => false,
+            other => {
+                return Err(Error::new(
+                    line,
+                    format!("unknown shape `{other}` (RoundedBoxShape() or EightSidedShape())"),
+                ));
+            }
+        };
+    }
+    Ok(style)
+}
+
+fn rel_style(field: &dyn Fn(&str) -> Option<String>, line: usize) -> Result<RelStyle, Error> {
+    let rgb = |name: &str| field(name).map(|v| color(&v, line)).transpose();
+    let offset = |name: &str| {
+        field(name)
+            .map(|v| {
+                v.trim()
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|n| n.is_finite())
+                    .ok_or_else(|| {
+                        Error::new(line, format!("`{name}` must be a number, found `{v}`"))
+                    })
+            })
+            .transpose()
+    };
+    Ok(RelStyle {
+        line_color: rgb("lineColor")?,
+        text_color: rgb("textColor")?,
+        line: field("lineStyle")
+            .map(|v| line_style(&v, line))
+            .transpose()?,
+        offset: (
+            offset("offsetX")?.unwrap_or(0.0),
+            offset("offsetY")?.unwrap_or(0.0),
+        ),
+    })
+}
+
+/// C4-PlantUML's `DashedLine()`, `DottedLine()`, `BoldLine()`, `SolidLine()`.
+fn line_style(value: &str, line: usize) -> Result<LineStyle, Error> {
+    Ok(match value {
+        "SolidLine()" => LineStyle::Solid,
+        "DashedLine()" => LineStyle::Dashed,
+        "DottedLine()" => LineStyle::Dotted,
+        "BoldLine()" => LineStyle::Bold,
+        other => {
+            return Err(Error::new(
+                line,
+                format!(
+                    "unknown line style `{other}` (SolidLine(), DashedLine(), DottedLine() or \
+                     BoldLine())"
+                ),
+            ));
+        }
+    })
+}
+
+/// Tag styles first, in the order each element lists its tags, then the
+/// `Update*Style` statements in source order.
+fn apply_styles(model: &mut C4, styles: Vec<PendingStyle>) -> Result<(), Error> {
+    let tag = |name: &str| model.tags.iter().find(|t| t.name == name);
+    let mut element_updates = Vec::new();
+    for (index, element) in model.elements.iter().enumerate() {
+        let mut style = ElementStyle::default();
+        let mut technology = None;
+        for name in &element.tags {
+            if let Some(t) = tag(name) {
+                style.merge(&t.element);
+                technology = t.technology.clone().or(technology);
+            }
+        }
+        element_updates.push((index, style, technology));
+    }
+    let boundary_styles: Vec<ElementStyle> = model
+        .boundaries
+        .iter()
+        .map(|b| {
+            let mut style = ElementStyle::default();
+            for name in &b.tags {
+                if let Some(t) = tag(name) {
+                    style.merge(&t.element);
+                }
+            }
+            style
+        })
+        .collect();
+    let rel_styles: Vec<RelStyle> = model
+        .relations
+        .iter()
+        .map(|r| {
+            let mut style = RelStyle::default();
+            for name in &r.tags {
+                if let Some(t) = tag(name) {
+                    style.merge(&t.relation);
+                }
+            }
+            style
+        })
+        .collect();
+    for (index, style, technology) in element_updates {
+        let element = &mut model.elements[index];
+        element.style = style;
+        if element.technology.is_none() {
+            element.technology = technology;
+        }
+    }
+    for (boundary, style) in model.boundaries.iter_mut().zip(boundary_styles) {
+        boundary.style = style;
+    }
+    for (relation, style) in model.relations.iter_mut().zip(rel_styles) {
+        relation.style = style;
+    }
+
+    for pending in styles {
+        match pending {
+            PendingStyle::Element {
+                line,
+                name,
+                style,
+                technology,
+            } => {
+                if let Some(element) = model.elements.iter_mut().find(|e| e.alias == name) {
+                    element.style.merge(&style);
+                    if technology.is_some() {
+                        element.technology = technology;
+                    }
+                } else if let Some(boundary) = model.boundaries.iter_mut().find(|b| b.alias == name)
+                {
+                    boundary.style.merge(&style);
+                } else {
+                    return Err(Error::new(
+                        line,
+                        format!("`UpdateElementStyle` names `{name}`, which is not defined"),
+                    ));
+                }
+            }
+            PendingStyle::Boundary { line, name, style } => {
+                let matches = |b: &Boundary| match &name {
+                    None => true,
+                    Some(name) => &b.alias == name || b.type_label.eq_ignore_ascii_case(name),
+                };
+                let mut any = false;
+                for boundary in model.boundaries.iter_mut().filter(|b| matches(b)) {
+                    boundary.style.merge(&style);
+                    any = true;
+                }
+                if !any {
+                    return Err(Error::new(
+                        line,
+                        format!(
+                            "`UpdateBoundaryStyle` names `{}`, which is no boundary's alias or \
+                             type",
+                            name.unwrap_or_default()
+                        ),
+                    ));
+                }
+            }
+            PendingStyle::Relation {
+                line,
+                from,
+                to,
+                style,
+            } => {
+                let mut any = false;
+                for relation in &mut model.relations {
+                    if model.elements[relation.from].alias == from
+                        && model.elements[relation.to].alias == to
+                    {
+                        relation.style.merge(&style);
+                        any = true;
+                    }
+                }
+                if !any {
+                    return Err(Error::new(
+                        line,
+                        format!("`UpdateRelStyle`: there is no relation from `{from}` to `{to}`"),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn boundary_keyword(keyword: &str) -> Option<BoundaryKind> {
@@ -537,13 +1125,14 @@ fn boundary_keyword(keyword: &str) -> Option<BoundaryKind> {
         "Enterprise_Boundary" => BoundaryKind::Enterprise,
         "System_Boundary" => BoundaryKind::System,
         "Container_Boundary" => BoundaryKind::Container,
+        "Deployment_Node" | "Node" | "Node_L" | "Node_R" => BoundaryKind::Node,
         _ => return None,
     })
 }
 
 fn relation_keyword(keyword: &str) -> Option<(Arrows, Option<Direction>)> {
     Some(match keyword {
-        "Rel" => (Arrows::Forward, None),
+        "Rel" | "RelIndex" => (Arrows::Forward, None),
         "BiRel" => (Arrows::Both, None),
         "Rel_Back" => (Arrows::Back, None),
         "Rel_U" | "Rel_Up" => (Arrows::Forward, Some(Direction::Up)),
@@ -564,11 +1153,8 @@ fn check_new_alias(model: &C4, alias: &str, line: usize) -> Result<(), Error> {
 }
 
 /// Assign arguments to `names`: positionally in order, or by `$name=`
-/// for the names in `keywords`. Empty arguments are `None`.
-///
-/// Anything past the last name is mermaid's sprite, tags and link, which
-/// this crate does not draw — so a non-empty one is an error rather than
-/// being dropped.
+/// for the names in `keywords`. Empty arguments are `None`. An argument
+/// past the last name is an error rather than being dropped.
 fn fields(
     keyword: &str,
     args: &[Arg],
@@ -587,8 +1173,7 @@ fn fields(
                     return Err(Error::new(
                         line,
                         format!(
-                            "`{keyword}` takes ({}); a sprite, tags or link argument \
-                             is not supported (see DESIGN.md)",
+                            "`{keyword}` takes ({}); `{value}` is one argument too many",
                             names.join(", ")
                         ),
                     ));
@@ -603,7 +1188,7 @@ fn fields(
                 else {
                     return Err(Error::new(
                         line,
-                        format!("`${key}` is not supported in `{keyword}` (see DESIGN.md)"),
+                        format!("`${key}` is not an argument of `{keyword}`"),
                     ));
                 };
                 out[slot] = Some(value.clone()).filter(|v| !v.is_empty());
@@ -890,43 +1475,163 @@ mod tests {
     fn out_of_subset_constructs_name_themselves() {
         for (source, name) in [
             (
-                "C4Context\nUpdateElementStyle(a, $bgColor=\"red\")\n",
-                "UpdateElementStyle",
+                "C4Context\nSystem(a, \"A\", \"d\", \"s\", \"t\", \"l\", \"extra\")\n",
+                "extra",
+            ),
+            ("C4Context\nSystem(a, \"A\", $colour=\"red\")\n", "$colour"),
+            (
+                "C4Context\nUpdateElementStyle(ghost, $bgColor=\"red\")\n",
+                "ghost",
             ),
             (
-                "C4Context\nUpdateRelStyle(a, b, $textColor=\"red\")\n",
-                "UpdateRelStyle",
-            ),
-            ("C4Context\nRelIndex(1, a, b, \"x\")\n", "RelIndex"),
-            (
-                "C4Context\nDeployment_Node(n, \"N\") {\n}\n",
-                "Deployment_Node",
+                "C4Context\nSystem(a, \"A\")\nUpdateRelStyle(a, a, $lineColor=\"red\")\n",
+                "no relation",
             ),
             (
-                "C4Context\nSystem(a, \"A\", \"d\", $tags=\"v1\")\n",
-                "$tags",
+                "C4Context\nSystem(a, \"A\")\nUpdateElementStyle(a, $bgColor=\"hsl(1,2,3)\")\n",
+                "hsl",
             ),
             (
-                "C4Context\nSystem(a, \"A\", $link=\"https://x\")\n",
-                "$link",
+                "C4Context\nAddRelTag(t, $lineStyle=\"WavyLine()\")\n",
+                "WavyLine()",
             ),
-            ("C4Context\nSystem(a, \"A\", \"d\", \"sprite\")\n", "sprite"),
-            (
-                "C4Context\nSystem_Boundary(b, \"B\", \"tag\") {\n}\n",
-                "tags",
-            ),
+            ("C4Context\nSHOW_LEGEND(sideways)\n", "SHOW_LEGEND"),
+            ("C4Context\nRelIndex()\n", "RelIndex"),
         ] {
+            let lines = source.lines().count();
             let error = parse(source).unwrap_err();
-            assert_eq!(error.line, 2, "{source}");
+            assert_eq!(error.line, lines, "{source}");
             assert!(error.message.contains(name), "{source}: {error:?}");
-            assert!(error.message.contains("DESIGN.md"), "{source}: {error:?}");
         }
 
-        for header in ["C4Dynamic", "C4Deployment"] {
-            let error = parse(&format!("{header}\n")).unwrap_err();
-            assert_eq!(error.line, 1);
-            assert!(error.message.contains(header), "{error:?}");
-        }
+        let error = parse("C4Landscape\n").unwrap_err();
+        assert_eq!(error.line, 1);
+        assert!(error.message.contains("C4Deployment"), "{error:?}");
+    }
+
+    #[test]
+    fn dynamic_views_keep_relations_in_order() {
+        let source = "C4Dynamic\nContainer(a, \"A\")\nContainer(b, \"B\")\n\
+            RelIndex(7, a, b, \"first\")\nRel(b, a, \"second\", \"JSON\")\n\
+            RelIndex(1, a, b, \"third\")\n";
+        let model = parse(source).unwrap();
+        assert_eq!(model.view, View::Dynamic);
+        let labels: Vec<_> = model.relations.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["first", "second", "third"]);
+        assert_eq!(model.relations[0].from, 0);
+        assert_eq!(model.relations[1].technology.as_deref(), Some("JSON"));
+    }
+
+    #[test]
+    fn deployment_nodes_nest_and_carry_type_and_description() {
+        let source = "C4Deployment\n\
+            Deployment_Node(cloud, \"AWS\", \"Cloud\", \"eu-west-1\") {\n\
+              Node(k8s, \"Cluster\") {\n\
+                Container(api, \"API\", \"Rust\")\n\
+              }\n\
+              Node_L(db, \"RDS\", \"Postgres 16\") {\n\
+                ContainerDb(store, \"Store\", \"SQL\")\n\
+              }\n\
+              Node_R(edge, \"CDN\", $descr=\"Static files\") {\n\
+              }\n\
+            }\n\
+            Rel(api, store, \"Reads\")\n";
+        let model = parse(source).unwrap();
+        assert_eq!(model.view, View::Deployment);
+        let b = &model.boundaries;
+        assert_eq!(b.len(), 4);
+        assert!(b.iter().all(|b| b.kind == BoundaryKind::Node));
+        assert_eq!(b[0].type_label, "Cloud");
+        assert_eq!(b[0].description.as_deref(), Some("eu-west-1"));
+        assert_eq!(b[1].type_label, "node");
+        assert_eq!(b[1].parent, Some(0));
+        assert_eq!(b[3].description.as_deref(), Some("Static files"));
+        assert_eq!(model.elements[0].boundary, Some(1));
+        assert_eq!(model.elements[1].boundary, Some(2));
+    }
+
+    #[test]
+    fn sprites_tags_and_links_are_accepted() {
+        let source = "C4Context\n\
+            AddElementTag(\"v1\", $bgColor=\"#d73027\", $fontColor=\"white\", $techn=\"Java\", \
+            $legendText=\"Legacy\")\n\
+            AddRelTag(async, $lineColor=\"blue\", $lineStyle=DashedLine())\n\
+            Person(u, \"User\", \"d\", \"person_sprite\", \"v1\", \"https://x\")\n\
+            System(s, \"Sys\", $sprite=\"server\", $tags=\"v1+other\", $link=\"https://y\")\n\
+            System_Boundary(b, \"B\", \"v1\") {\n\
+            }\n\
+            Rel(u, s, \"Uses\", $tags=\"async\", $link=\"https://z\")\n";
+        let model = parse(source).unwrap();
+        let (u, s) = (&model.elements[0], &model.elements[1]);
+        assert_eq!(u.sprite.as_deref(), Some("person_sprite"));
+        assert_eq!(u.tags, ["v1"]);
+        assert_eq!(u.link.as_deref(), Some("https://x"));
+        assert_eq!(s.tags, ["v1", "other"]);
+        assert_eq!(s.style.colors.fill, Some((0xd7, 0x30, 0x27)));
+        assert_eq!(s.style.colors.text, Some((255, 255, 255)));
+        assert_eq!(s.technology.as_deref(), Some("Java"));
+        assert_eq!(model.boundaries[0].tags, ["v1"]);
+        assert_eq!(
+            model.boundaries[0].style.colors.fill,
+            Some((0xd7, 0x30, 0x27))
+        );
+        let rel = &model.relations[0];
+        assert_eq!(rel.style.line_color, Some((0, 0, 255)));
+        assert_eq!(rel.style.line, Some(LineStyle::Dashed));
+        assert_eq!(model.tags[0].legend.as_deref(), Some("Legacy"));
+    }
+
+    #[test]
+    fn style_updates_override_tags() {
+        let source = "C4Context\n\
+            AddElementTag(t, $bgColor=\"red\")\n\
+            System(a, \"A\", $tags=\"t\")\n\
+            System(b, \"B\")\n\
+            Boundary(g, \"G\", \"team\") {\n\
+            }\n\
+            UpdateElementStyle(a, $bgColor=\"#00ff00\", $borderColor=\"blue\", \
+            $shape=\"EightSidedShape()\")\n\
+            UpdateElementStyle(b, \"#123\", \"#456\")\n\
+            UpdateBoundaryStyle(team, $bgColor=\"ivory\", $borderStyle=\"DashedLine()\")\n\
+            Rel(a, b, \"x\")\n\
+            UpdateRelStyle(a, b, $textColor=\"red\", $lineColor=\"teal\", $offsetX=\"10\", \
+            $offsetY=\"-20\")\n";
+        let model = parse(source).unwrap();
+        let a = &model.elements[0].style;
+        assert_eq!(a.colors.fill, Some((0, 255, 0)));
+        assert_eq!(a.colors.stroke, Some((0, 0, 255)));
+        assert!(a.octagon);
+        let b = &model.elements[1].style;
+        assert_eq!(b.colors.fill, Some((0x11, 0x22, 0x33)));
+        assert_eq!(b.colors.text, Some((0x44, 0x55, 0x66)));
+        let g = &model.boundaries[0].style;
+        assert_eq!(g.colors.fill, Some((255, 255, 240)));
+        assert!(g.colors.dashed);
+        let r = &model.relations[0].style;
+        assert_eq!(r.line_color, Some((0, 128, 128)));
+        assert_eq!(r.text_color, Some((255, 0, 0)));
+        assert_eq!(r.offset, (10.0, -20.0));
+    }
+
+    #[test]
+    fn legend_stereotype_and_layout_macros() {
+        let source = "C4Context\nLAYOUT_LEFT_RIGHT()\nSHOW_LEGEND()\nHIDE_STEREOTYPE()\n\
+            System(a, \"A\")\n";
+        let model = parse(source).unwrap();
+        assert!(model.legend && model.hide_stereotype);
+    }
+
+    #[test]
+    fn accessibility_statements() {
+        let source = "C4Context\naccTitle: Shown as the title\naccDescr {\n  Two\n  lines\n}\n\
+            System(a, \"A\")\n";
+        let model = parse(source).unwrap();
+        assert_eq!(model.title.as_deref(), Some("Shown as the title"));
+        assert_eq!(model.acc_descr.as_deref(), Some("Two\nlines"));
+        let model = parse("C4Context\naccDescr: one line\n").unwrap();
+        assert_eq!(model.acc_descr.as_deref(), Some("one line"));
+        let error = parse("C4Context\naccDescr {\n  open\n").unwrap_err();
+        assert_eq!(error.line, 2);
     }
 
     #[test]

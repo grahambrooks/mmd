@@ -47,8 +47,8 @@ pub enum Origin {
 pub struct Commit {
     /// Unique within the graph; `cherry-pick id:` refers to it.
     pub id: String,
-    /// The text drawn beside the commit, if any. Cherry-picks have none,
-    /// as in mermaid.
+    /// The text drawn beside the commit, if any. Cherry-picks and merges
+    /// without an `id:` have none, as in mermaid.
     pub label: Option<String>,
     /// `msg:`. Mermaid parses it but never draws it, so neither does this.
     pub message: Option<String>,
@@ -416,8 +416,9 @@ impl Parser {
                 commit.id = id;
             }
             None => {
+                // Mermaid labels a merge only when it is given an id.
                 commit.id = format!("merge-{}", self.graph.commits.len());
-                commit.label = Some(format!("merge {name}"));
+                commit.label = None;
             }
         }
         self.push(commit);
@@ -634,7 +635,7 @@ mod tests {
         assert_eq!(merge.branch, 0);
         assert_eq!(merge.kind, CommitType::Merge);
         assert_eq!(merge.origin, Origin::Merge);
-        assert_eq!(merge.label.as_deref(), Some("merge dev"));
+        assert_eq!(merge.label, None);
     }
 
     #[test]

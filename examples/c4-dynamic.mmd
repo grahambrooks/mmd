@@ -1,0 +1,16 @@
+%% showcase: C4Dynamic — numbered interactions
+%% prose: A dynamic view numbers each relation in the order it is declared, so the labels read as a sequence of steps. RelIndex and plain Rel share one count.
+%% approx: The index RelIndex is given is ignored and relations are numbered in declaration order — mermaid does the same.
+%% approx: Mermaid keeps only the last of several relations between the same two elements; mmd draws and numbers each one.
+C4Dynamic
+    title Uploading a document
+    Person(author, "Author", "Writes Markdown")
+    Container(spa, "Editor", "TypeScript", "Runs in the browser")
+    Container(api, "API", "Rust, axum", "Accepts uploads")
+    ContainerDb(db, "Store", "Postgres", "Documents and their history")
+    ContainerQueue(jobs, "Render jobs", "SQS")
+    Rel(author, spa, "Saves the draft")
+    RelIndex(2, spa, api, "POST /documents", "JSON/HTTPS")
+    RelIndex(3, api, db, "Stores the upload", "SQL")
+    RelIndex(4, api, jobs, "Queues a render")
+    Rel(api, spa, "202 Accepted")

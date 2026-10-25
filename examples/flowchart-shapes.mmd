@@ -1,0 +1,69 @@
+%% showcase: Flowchart v11 shapes
+%% prose: Every shape name in mermaid's v11 `@{ shape: … }` syntax renders. Where the scene has no outline of its own, the nearest one stands in, so a diagram keeps every node and its label.
+%% approx: Cylinder for datastore and lin-cyl; cloud for bang; folded note for notch-rect (card) and tag-rect.
+%% approx: Doubled sides (subroutine) for lin-rect, div-rect, win-pane and st-rect (processes).
+%% approx: Hexagon for hourglass (collate); pill for delay; a plain box for curv-trap (display), as for odd.
+%% approx: Trapezoid for tri (extract), flip-tri, notch-pent (loop-limit) and sl-rect (manual-input); trap-t and lean-l draw like trap-b and lean-r.
+%% approx: Wavy document for docs, tag-doc, lin-doc and flag (paper-tape); horizontal cylinder for bow-rect (stored-data).
+%% approx: Parallelogram for bolt; plain circle for cross-circ and dbl-circ; brace, brace-r and braces show just their text.
+%% approx: Icon and image nodes (icon:, img:) are drawn as their label, or the icon name, in a box of their form.
+flowchart LR
+    s1@{ shape: rect, label: "rect" }
+    s2@{ shape: rounded, label: "rounded" }
+    s3@{ shape: stadium, label: "stadium" }
+    s4@{ shape: fr-rect, label: "fr-rect" }
+    s5@{ shape: cyl, label: "cyl" }
+    s6@{ shape: datastore, label: "datastore" }
+    s1 ~~~ s2 ~~~ s3 ~~~ s4 ~~~ s5 ~~~ s6
+    s7@{ shape: circle, label: "circle" }
+    s8@{ shape: bang, label: "bang" }
+    s9@{ shape: cloud, label: "cloud" }
+    s10@{ shape: diam, label: "diam" }
+    s11@{ shape: hex, label: "hex" }
+    s12@{ shape: lean-r, label: "lean-r" }
+    s7 ~~~ s8 ~~~ s9 ~~~ s10 ~~~ s11 ~~~ s12
+    s13@{ shape: lean-l, label: "lean-l" }
+    s14@{ shape: trap-b, label: "trap-b" }
+    s15@{ shape: trap-t, label: "trap-t" }
+    s16@{ shape: dbl-circ, label: "dbl-circ" }
+    s17@{ shape: text, label: "text" }
+    s18@{ shape: notch-rect, label: "notch-rect" }
+    s13 ~~~ s14 ~~~ s15 ~~~ s16 ~~~ s17 ~~~ s18
+    s19@{ shape: lin-rect, label: "lin-rect" }
+    s20@{ shape: hourglass, label: "hourglass" }
+    s21@{ shape: brace, label: "brace" }
+    s22@{ shape: brace-r, label: "brace-r" }
+    s23@{ shape: braces, label: "braces" }
+    s24@{ shape: bolt, label: "bolt" }
+    s19 ~~~ s20 ~~~ s21 ~~~ s22 ~~~ s23 ~~~ s24
+    s25@{ shape: doc, label: "doc" }
+    s26@{ shape: delay, label: "delay" }
+    s27@{ shape: h-cyl, label: "h-cyl" }
+    s28@{ shape: lin-cyl, label: "lin-cyl" }
+    s29@{ shape: curv-trap, label: "curv-trap" }
+    s30@{ shape: div-rect, label: "div-rect" }
+    s25 ~~~ s26 ~~~ s27 ~~~ s28 ~~~ s29 ~~~ s30
+    s31@{ shape: tri, label: "tri" }
+    s32@{ shape: win-pane, label: "win-pane" }
+    s33@{ shape: notch-pent, label: "notch-pent" }
+    s34@{ shape: flip-tri, label: "flip-tri" }
+    s35@{ shape: sl-rect, label: "sl-rect" }
+    s36@{ shape: docs, label: "docs" }
+    s31 ~~~ s32 ~~~ s33 ~~~ s34 ~~~ s35 ~~~ s36
+    s37@{ shape: st-rect, label: "st-rect" }
+    s38@{ shape: bow-rect, label: "bow-rect" }
+    s39@{ shape: cross-circ, label: "cross-circ" }
+    s40@{ shape: tag-doc, label: "tag-doc" }
+    s41@{ shape: tag-rect, label: "tag-rect" }
+    s42@{ shape: flag, label: "flag" }
+    s37 ~~~ s38 ~~~ s39 ~~~ s40 ~~~ s41 ~~~ s42
+    s43@{ shape: odd, label: "odd" }
+    s44@{ shape: lin-doc, label: "lin-doc" }
+    s45@{ shape: sm-circ }
+    s46@{ shape: fr-circ }
+    s47@{ shape: f-circ }
+    s48@{ shape: fork }
+    s43 ~~~ s44 ~~~ s45 ~~~ s46 ~~~ s47 ~~~ s48
+    icon1@{ icon: "fa:user", form: circle, label: "icon" }
+    img1@{ img: "https://example.com/logo.png", label: "img", w: 60, h: 60 }
+    icon1 ~~~ img1

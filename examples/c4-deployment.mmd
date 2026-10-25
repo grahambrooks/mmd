@@ -1,0 +1,25 @@
+%% showcase: C4Deployment with nested nodes
+%% prose: Deployment nodes are solid boxes that nest as deep as the source nests them, each labelled with its [type] and an optional description; containers sit inside the node they are deployed to.
+%% approx: Node_L and Node_R are drawn like Node; mermaid draws them alike too.
+%% approx: Placement is declaration order, so a relation can cross a node rather than run beside it.
+C4Deployment
+    title Deployment of the publishing service
+    Deployment_Node(browser, "Reader's device", "Browser") {
+        Container(spa, "Reader", "TypeScript", "Shows published PDFs")
+    }
+    Deployment_Node(aws, "AWS", "Cloud", "eu-west-1") {
+        Deployment_Node(k8s, "Cluster", "Kubernetes") {
+            Node(pod, "api pod", "Container") {
+                Container(api, "API", "Rust, axum", "Serves documents")
+            }
+            Node_R(workers, "worker pods", "Container", "Scaled on queue depth") {
+                Container(worker, "Render worker", "Rust, md2pdf")
+            }
+        }
+        Node_L(rds, "RDS", "Postgres 16") {
+            ContainerDb(store, "Document store", "SQL", "Sources and PDFs")
+        }
+    }
+    Rel(spa, api, "Fetches", "HTTPS")
+    Rel(api, store, "Reads and writes", "SQL")
+    Rel(worker, store, "Saves PDFs", "SQL")

@@ -65,7 +65,52 @@ pub fn layout(chart: &Flowchart, measure: &dyn Measure) -> Scene {
     for &(n, rect) in &block.nodes {
         nodes[n].rect = rect;
     }
-    scene.nodes = nodes;
+    // A link to a subgraph stops at the subgraph's box; its anchor inside
+    // is not drawn.
+    let sub_box = |sub: Option<usize>, n: usize| {
+        let node = &chart.nodes[n];
+        sub.or_else(|| {
+            (node.shape == NodeShape::Anchor)
+                .then_some(node.parent)
+                .flatten()
+        })
+        .and_then(|s| block.boxes.iter().find(|(b, _)| *b == s))
+        .map(|&(_, rect)| rect)
+    };
+    for (i, edge) in &mut block.edges {
+        let link = &chart.links[*i];
+        let mut clipped = false;
+        if let Some(rect) = sub_box(link.to_sub, link.to)
+            && let Some(path) = clip_at_box(&edge.path, rect, true)
+        {
+            edge.path = path;
+            clipped = true;
+        }
+        if let Some(rect) = sub_box(link.from_sub, link.from)
+            && let Some(path) = clip_at_box(&edge.path, rect, false)
+        {
+            edge.path = path;
+            clipped = true;
+        }
+        if let Some(s) = link.to_sub {
+            edge.to = Some(chart.subgraphs[s].id.clone());
+        }
+        if let Some(s) = link.from_sub {
+            edge.from = Some(chart.subgraphs[s].id.clone());
+        }
+        // The label goes back to the middle of what is left of the line.
+        if clipped && let Some(pos) = diagram_scene::route::label_position(&edge.path, 0.0) {
+            for label in &mut edge.labels {
+                label.pos = pos;
+            }
+        }
+    }
+    scene.nodes = nodes
+        .into_iter()
+        .zip(&chart.nodes)
+        .filter(|(_, source)| source.shape != NodeShape::Anchor)
+        .map(|(node, _)| node)
+        .collect();
     block.edges.sort_by_key(|(i, _)| *i);
     scene.edges = block.edges.into_iter().map(|(_, e)| e).collect();
     scene
@@ -133,9 +178,11 @@ impl<'a> Ctx<'a> {
             .collect();
         let sizes = nodes
             .iter()
-            .map(|n| {
+            .zip(&chart.nodes)
+            .map(|(n, source)| {
                 let (w, h) = natural_size(n, FONT_SIZE, measure);
                 match n.shape {
+                    _ if source.shape == NodeShape::Anchor => (2.0, 2.0),
                     Shape::Start | Shape::End | Shape::ForkBar => (w, h),
                     _ => (w.max(48.0), h.max(36.0)),
                 }
@@ -508,6 +555,40 @@ impl Block {
     }
 }
 
+/// `path` cut where it first enters `rect`, coming from its start (`at_end`)
+/// or from its end; `None` when it never enters it from outside.
+fn clip_at_box(path: &[Seg], rect: Rect, at_end: bool) -> Option<Vec<Seg>> {
+    let mut points: Vec<Point> = diagram_scene::flatten::flatten(path, 0.5)
+        .into_iter()
+        .flat_map(|poly| poly.points)
+        .collect();
+    if !at_end {
+        points.reverse();
+    }
+    let k = points.iter().position(|p| rect.contains(*p))?;
+    if k == 0 {
+        return None;
+    }
+    // Bisect the step that crosses the box's edge.
+    let (mut out, mut inside) = (points[k - 1], points[k]);
+    for _ in 0..24 {
+        let mid = out.lerp(inside, 0.5);
+        if rect.contains(mid) {
+            inside = mid;
+        } else {
+            out = mid;
+        }
+    }
+    let mut kept = points[..k].to_vec();
+    kept.push(out);
+    if !at_end {
+        kept.reverse();
+    }
+    let mut segs = vec![Seg::Move(kept[0])];
+    segs.extend(kept[1..].iter().map(|&p| Seg::Line(p)));
+    Some(segs)
+}
+
 /// The leftmost x at which `path` passes through `band`.
 fn leftmost_crossing(path: &[Seg], band: Rect) -> Option<f32> {
     let mut best: Option<f32> = None;
@@ -568,6 +649,7 @@ fn shape(shape: NodeShape) -> Shape {
         NodeShape::Dot => Shape::Start,
         NodeShape::RingedDot => Shape::End,
         NodeShape::Bar => Shape::ForkBar,
+        NodeShape::Anchor => Shape::Start,
     }
 }
 
@@ -1107,5 +1189,33 @@ mod tests {
         let text = s.node("E").unwrap();
         assert_eq!(text.style.stroke, Paint::None);
         assert_eq!(text.label[0].plain(), "just text");
+    }
+
+    #[test]
+    fn links_to_a_subgraph_stop_at_its_box() {
+        let s = scene(
+            "flowchart TB\n  A --> g\n  subgraph g [Group]\n    B --> C\n  end\n  g --> D\n  subgraph e [Empty]\n  end\n  D --> e\n",
+        );
+        let boxes: Vec<Rect> = s.containers.iter().map(|c| c.rect).collect();
+        // No anchor or subgraph-id node is drawn.
+        assert!(s.nodes.iter().all(|n| n.id != "g" && n.id != "e"));
+        // Links: A→g, B→C inside g, g→D, D→e.
+        for (edge, rect, at_end) in [
+            (&s.edges[0], boxes[0], true),
+            (&s.edges[2], boxes[0], false),
+            (&s.edges[3], boxes[1], true),
+        ] {
+            let tip = if at_end {
+                diagram_scene::flatten::end(&edge.path)
+            } else {
+                diagram_scene::flatten::start(&edge.path)
+            }
+            .unwrap()
+            .0;
+            let on_edge = (tip.y - rect.y).abs() < 0.5 || (tip.y - rect.bottom()).abs() < 0.5;
+            assert!(on_edge, "{tip:?} is not on {rect:?}");
+        }
+        assert_eq!(s.edges[0].to.as_deref(), Some("g"));
+        assert_eq!(s.edges[2].from.as_deref(), Some("g"));
     }
 }

@@ -49,12 +49,18 @@ pub enum NodeShape {
     RingedDot,
     /// A thick bar (`fork`/`join`): no label.
     Bar,
+    /// Where a link to a subgraph ends: a point inside the subgraph,
+    /// never drawn. The link is cut where it meets the subgraph's box.
+    Anchor,
 }
 
 impl NodeShape {
     /// Shapes mermaid draws without their label.
     pub fn unlabelled(self) -> bool {
-        matches!(self, NodeShape::Dot | NodeShape::RingedDot | NodeShape::Bar)
+        matches!(
+            self,
+            NodeShape::Dot | NodeShape::RingedDot | NodeShape::Bar | NodeShape::Anchor
+        )
     }
 }
 
@@ -121,6 +127,10 @@ pub struct Link {
     pub id: Option<String>,
     /// Its own `linkStyle`, which replaces `linkStyle default`.
     pub style: Option<LinkStyle>,
+    /// When the source named a subgraph at this end: that subgraph. The
+    /// link then runs to one of its members and is cut at its box.
+    pub from_sub: Option<usize>,
+    pub to_sub: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -335,7 +345,9 @@ impl Parser {
     fn header(&mut self, line: &str, number: usize) -> Result<(), Error> {
         let mut words = line.split_whitespace();
         match words.next() {
-            Some("flowchart" | "graph") => {}
+            // `flowchart-elk` asks for the ELK layout engine; it gets the
+            // same layered layout as any flowchart.
+            Some("flowchart" | "graph" | "flowchart-elk") => {}
             _ => return Err(Error::new(number, "expected `flowchart` or `graph`")),
         }
         if let Some(dir) = words.next() {
@@ -644,25 +656,59 @@ impl Parser {
         }
         let chart = &mut self.chart;
         // A `style` or `class` written before its subgraph made a node of
-        // that id: hand its colours to the subgraph. A link to a subgraph is
-        // another matter.
+        // that id: hand its colours to the subgraph. A node of that id that
+        // a link names becomes the subgraph's anchor, where the link ends.
         for s in 0..chart.subgraphs.len() {
             let id = chart.subgraphs[s].id.clone();
             let Some(n) = chart.nodes.iter().position(|node| node.id == id) else {
                 continue;
             };
             let node = &chart.nodes[n];
-            if chart.links.iter().any(|l| l.from == n || l.to == n) {
-                return Err(Error::new(
-                    node.source_line,
-                    format!("a link to subgraph `{id}` is not supported (see DESIGN.md)"),
-                ));
-            }
             if node.label != node.id || node.shape != NodeShape::Rect {
                 return Err(Error::new(
                     node.source_line,
                     format!("node `{id}` has the same id as a subgraph"),
                 ));
+            }
+            // As mermaid does, a link to a subgraph runs to a member — the
+            // first for a link in, the last for a link out — and is cut
+            // where it meets the subgraph's box.
+            let members: Vec<usize> = (0..chart.nodes.len())
+                .filter(|&m| m != n && within(chart, chart.nodes[m].parent, s))
+                .collect();
+            let linked = chart.links.iter().any(|l| l.from == n || l.to == n);
+            let redirect = |avoid: usize, last: bool| {
+                let mut pick = members.iter().copied().filter(|&m| m != avoid);
+                if last { pick.next_back() } else { pick.next() }
+            };
+            let fits = chart.links.iter().all(|l| {
+                (l.to != n || redirect(l.from, false).is_some())
+                    && (l.from != n || redirect(l.to, true).is_some())
+            });
+            if linked && fits {
+                for i in 0..chart.links.len() {
+                    let l = &chart.links[i];
+                    let (from, to) = (l.from, l.to);
+                    if to == n {
+                        chart.links[i].to = redirect(from, false).unwrap_or(to);
+                        chart.links[i].to_sub = Some(s);
+                    }
+                    if from == n {
+                        chart.links[i].from = redirect(chart.links[i].to, true).unwrap_or(from);
+                        chart.links[i].from_sub = Some(s);
+                    }
+                }
+            } else if linked {
+                // Nothing in the subgraph to run to: end at a point in it.
+                let node = &mut chart.nodes[n];
+                node.shape = NodeShape::Anchor;
+                node.parent = Some(s);
+                let classes = std::mem::take(&mut node.classes);
+                let style = std::mem::take(&mut node.style);
+                let sub = &mut chart.subgraphs[s];
+                sub.classes.extend(classes);
+                sub.style.merge(&style);
+                continue;
             }
             let node = chart.nodes.remove(n);
             let sub = &mut chart.subgraphs[s];
@@ -696,6 +742,17 @@ impl Parser {
         }
         Ok(self.chart)
     }
+}
+
+/// Whether `sub` (a node's parent) is subgraph `s` or inside it.
+fn within(chart: &Flowchart, mut sub: Option<usize>, s: usize) -> bool {
+    while let Some(c) = sub {
+        if c == s {
+            return true;
+        }
+        sub = chart.subgraphs[c].parent;
+    }
+    false
 }
 
 /// d3 curves mermaid accepts for `interpolate` and `curve:`.
@@ -832,6 +889,8 @@ fn chain(
                     end: link.end,
                     id,
                     style: None,
+                    from_sub: None,
+                    to_sub: None,
                 });
             }
         }
@@ -999,6 +1058,8 @@ fn data_pairs(body: &str, number: usize) -> Result<Vec<(String, String)>, Error>
 fn node_data(chart: &mut Flowchart, index: usize, body: &str, number: usize) -> Result<(), Error> {
     let mut label = None;
     let mut markdown = true;
+    let mut picture = None;
+    let mut form = None;
     for (key, value) in data_pairs(body, number)? {
         match key.as_str() {
             "shape" => chart.nodes[index].shape = named_shape(&value, number)?,
@@ -1015,10 +1076,31 @@ fn node_data(chart: &mut Flowchart, index: usize, body: &str, number: usize) -> 
                     }
                 }
             }
-            "icon" | "img" | "form" | "pos" | "w" | "h" | "constraint" => {
+            // An icon or image is drawn as its label in a box: the icon
+            // name, or the image's URL, when there is no label.
+            "icon" | "img" => picture = Some(value),
+            "form" => {
+                form = Some(match value.as_str() {
+                    "square" => NodeShape::Rect,
+                    "circle" => NodeShape::Circle,
+                    "rounded" => NodeShape::Round,
+                    _ => {
+                        return Err(Error::new(
+                            number,
+                            format!("unknown form `{value}` (square, circle or rounded)"),
+                        ));
+                    }
+                })
+            }
+            "pos" if matches!(value.as_str(), "t" | "b") => {}
+            "w" | "h" => {
+                length(&value, number, &key)?;
+            }
+            "constraint" if matches!(value.as_str(), "on" | "off") => {}
+            "pos" | "constraint" => {
                 return Err(Error::new(
                     number,
-                    format!("`{key}`: icon and image nodes are not supported (see DESIGN.md)"),
+                    format!("unexpected value `{value}` for `{key}`"),
                 ));
             }
             _ => {
@@ -1027,6 +1109,17 @@ fn node_data(chart: &mut Flowchart, index: usize, body: &str, number: usize) -> 
                     format!("unknown node property `{key}` (shape, label or labelType)"),
                 ));
             }
+        }
+    }
+    if picture.is_some() {
+        let n = &mut chart.nodes[index];
+        n.shape = form.unwrap_or(match n.shape {
+            NodeShape::Circle | NodeShape::Round => n.shape,
+            _ => NodeShape::Rect,
+        });
+        if label.is_none() && n.label == n.id {
+            label = picture;
+            markdown = false;
         }
     }
     if let Some(label) = label {
@@ -1063,91 +1156,35 @@ fn named_shape(name: &str, number: usize) -> Result<NodeShape, Error> {
         "sm-circ" | "start" | "small-circle" | "f-circ" | "junction" | "filled-circle" => Dot,
         "fr-circ" | "stop" | "framed-circle" => RingedDot,
         "fork" | "join" => Bar,
-        _ if UNSUPPORTED_SHAPES.contains(&name) => {
-            return Err(Error::new(
-                number,
-                format!("shape `{name}` is not supported (see DESIGN.md)"),
-            ));
-        }
+        // Upstream outlines the scene has no drawing for, each drawn as the
+        // nearest one it has (see `examples/flowchart-shapes.mmd`).
+        "datastore" | "data-store" | "lin-cyl" | "disk" | "lined-cylinder" => Cylinder,
+        "bang" => Cloud,
+        "notch-rect" | "card" | "notched-rectangle" | "tag-rect" | "tagged-rectangle"
+        | "tag-proc" | "tagged-process" => Note,
+        "lin-rect" | "lined-rectangle" | "lined-process" | "lin-proc" | "shaded-process"
+        | "div-rect" | "div-proc" | "divided-rectangle" | "divided-process" | "win-pane"
+        | "internal-storage" | "window-pane" | "st-rect" | "procs" | "processes"
+        | "stacked-rectangle" => Subroutine,
+        "hourglass" | "collate" => Hexagon,
+        "brace" | "comment" | "brace-l" | "brace-r" | "braces" => Text,
+        "bolt" | "com-link" | "lightning-bolt" => Parallelogram,
+        "delay" | "half-rounded-rectangle" => Stadium,
+        "curv-trap" | "curved-trapezoid" | "display" => Asymmetric,
+        "tri" | "extract" | "triangle" | "notch-pent" | "loop-limit" | "notched-pentagon"
+        | "sl-rect" | "manual-input" | "sloped-rectangle" => Trapezoid,
+        "flip-tri" | "manual-file" | "flipped-triangle" => TrapezoidAlt,
+        "docs" | "documents" | "st-doc" | "stacked-document" | "tag-doc" | "tagged-document"
+        | "flag" | "paper-tape" | "lin-doc" | "lined-document" => Document,
+        "bow-rect" | "stored-data" | "bow-tie-rectangle" => HorizontalCylinder,
+        "cross-circ" | "summary" | "crossed-circle" => Circle,
+        // Icon and image nodes: the label in a box (see `node_data`).
+        "icon" | "iconSquare" | "imageSquare" | "image" | "img" => Rect,
+        "iconCircle" => Circle,
+        "iconRounded" => Round,
         _ => return Err(Error::new(number, format!("unknown shape `{name}`"))),
     })
 }
-
-/// Mermaid's shapes with no counterpart here.
-const UNSUPPORTED_SHAPES: [&str; 72] = [
-    "datastore",
-    "data-store",
-    "bang",
-    "notch-rect",
-    "card",
-    "notched-rectangle",
-    "lin-rect",
-    "lined-rectangle",
-    "lined-process",
-    "lin-proc",
-    "shaded-process",
-    "hourglass",
-    "collate",
-    "brace",
-    "comment",
-    "brace-l",
-    "brace-r",
-    "braces",
-    "bolt",
-    "com-link",
-    "lightning-bolt",
-    "delay",
-    "half-rounded-rectangle",
-    "lin-cyl",
-    "disk",
-    "lined-cylinder",
-    "curv-trap",
-    "curved-trapezoid",
-    "display",
-    "div-rect",
-    "div-proc",
-    "divided-rectangle",
-    "divided-process",
-    "tri",
-    "extract",
-    "triangle",
-    "win-pane",
-    "internal-storage",
-    "window-pane",
-    "notch-pent",
-    "loop-limit",
-    "notched-pentagon",
-    "flip-tri",
-    "manual-file",
-    "flipped-triangle",
-    "sl-rect",
-    "manual-input",
-    "sloped-rectangle",
-    "docs",
-    "documents",
-    "st-doc",
-    "stacked-document",
-    "st-rect",
-    "procs",
-    "processes",
-    "stacked-rectangle",
-    "bow-rect",
-    "stored-data",
-    "bow-tie-rectangle",
-    "cross-circ",
-    "summary",
-    "crossed-circle",
-    "tag-doc",
-    "tagged-document",
-    "tag-rect",
-    "tagged-rectangle",
-    "tag-proc",
-    "tagged-process",
-    "flag",
-    "paper-tape",
-    "lin-doc",
-    "lined-document",
-];
 
 /// Where `close` ends a label, skipping a quoted one.
 fn find_closer(body: &str, close: &str) -> Option<usize> {
@@ -1548,10 +1585,33 @@ mod tests {
     }
 
     #[test]
-    fn a_link_to_a_subgraph_is_an_error() {
-        let e = error("flowchart TD\n  subgraph one\n    A\n  end\n  B --> one\n");
+    fn a_link_to_a_subgraph_runs_to_a_member() {
+        let chart = parse(
+            "flowchart TD\n  B --> one\n  subgraph one\n    A --> Z\n  end\n  one --> C\n  one --> A\n",
+        )
+        .unwrap();
+        assert!(chart.nodes.iter().all(|n| n.id != "one"));
+        let ids = |l: &Link| {
+            (
+                chart.nodes[l.from].id.as_str(),
+                chart.nodes[l.to].id.as_str(),
+            )
+        };
+        assert_eq!(ids(&chart.links[0]), ("B", "A"));
+        assert_eq!(chart.links[0].to_sub, Some(0));
+        assert_eq!(ids(&chart.links[2]), ("Z", "C"));
+        assert_eq!(chart.links[2].from_sub, Some(0));
+        // Not to itself: the last member that isn't the other end.
+        assert_eq!(ids(&chart.links[3]), ("Z", "A"));
+
+        // An empty subgraph: the link ends at a point inside it.
+        let chart = parse("flowchart TD\n  B --> one\n  subgraph one\n  end\n").unwrap();
+        let anchor = node(&chart, "one");
+        assert_eq!(anchor.shape, NodeShape::Anchor);
+        assert_eq!(anchor.parent, Some(0));
+        let e = error("flowchart TD\n  subgraph one\n    A\n  end\n  B --> one[Box]\n");
         assert_eq!(e.line, 5);
-        assert!(e.message.contains("subgraph `one`"), "{e:?}");
+        assert!(e.message.contains("same id as a subgraph"), "{e:?}");
     }
 
     #[test]
@@ -1730,10 +1790,10 @@ mod tests {
         let e = error("flowchart TD\n  A@{ shape: wobbly }\n");
         assert_eq!(e.line, 2);
         assert!(e.message.contains("unknown shape `wobbly`"), "{e:?}");
-        let e = error("flowchart TD\n  A@{ shape: bolt }\n");
-        assert!(e.message.contains("`bolt` is not supported"), "{e:?}");
-        let e = error("flowchart TD\n  A@{ icon: \"fa:user\" }\n");
-        assert!(e.message.contains("icon"), "{e:?}");
+        let e = error("flowchart TD\n  A@{ icon: \"fa:user\", form: hexagonal }\n");
+        assert!(e.message.contains("hexagonal"), "{e:?}");
+        let e = error("flowchart TD\n  A@{ img: \"x.png\", w: wide }\n");
+        assert!(e.message.contains("wide"), "{e:?}");
         let e = error("flowchart TD\n  A@{ colour: red }\n");
         assert!(e.message.contains("colour"), "{e:?}");
         let e = error("flowchart TD\n  A@{ shape: rect\n");
@@ -1742,6 +1802,63 @@ mod tests {
         assert!(e.message.contains("Begin"), "{e:?}");
         let e = error("flowchart TD\n  A[|a:b|text]\n");
         assert_eq!(e.line, 2);
+    }
+
+    #[test]
+    fn every_upstream_shape_name_is_drawn() {
+        for name in [
+            "bolt",
+            "card",
+            "delay",
+            "triangle",
+            "hourglass",
+            "bow-rect",
+            "curv-trap",
+            "div-rect",
+            "lin-cyl",
+            "lin-doc",
+            "notch-rect",
+            "st-rect",
+            "tag-doc",
+            "win-pane",
+            "flip-tri",
+            "brace",
+            "brace-r",
+            "braces",
+            "cross-circ",
+            "docs",
+            "processes",
+            "collate",
+            "extract",
+            "manual-input",
+            "datastore",
+            "bang",
+            "notch-pent",
+            "flag",
+            "tag-rect",
+            "lin-rect",
+        ] {
+            let chart = parse(&format!("flowchart TD\n  A@{{ shape: {name} }}\n")).unwrap();
+            assert_eq!(chart.nodes[0].label, "A", "{name}");
+        }
+    }
+
+    #[test]
+    fn icons_and_images_are_labelled_boxes() {
+        let chart = parse(
+            "flowchart TD\n  A@{ icon: \"fa:user\", form: circle, pos: t, h: 60 }\n  B@{ img: \"https://x/y.png\", label: \"Logo\", w: 60, h: 60, constraint: on }\n  C@{ icon: \"aws:s3\", label: \"Bucket\" }\n",
+        )
+        .unwrap();
+        let n = |id: &str| node(&chart, id);
+        assert_eq!(
+            (n("A").shape, n("A").label.as_str()),
+            (NodeShape::Circle, "fa:user")
+        );
+        assert_eq!(
+            (n("B").shape, n("B").label.as_str()),
+            (NodeShape::Rect, "Logo")
+        );
+        assert_eq!(n("C").label, "Bucket");
     }
 
     #[test]

@@ -1,0 +1,20 @@
+%% showcase: C4 styles, tags and a legend
+%% prose: UpdateElementStyle and UpdateRelStyle recolour single elements and relations; AddElementTag and AddRelTag define styles that $tags applies. The legend lists each kind of element drawn and each tag in use.
+%% approx: $sprite and $link are accepted and not drawn: icons are out of scope and a static SVG has no click target.
+%% approx: A relation's textColor is accepted but not drawn; its label keeps the theme's colour.
+%% approx: AddElementTag, AddRelTag, UpdateBoundaryStyle, SHOW_LEGEND() and HIDE_STEREOTYPE() come from C4-PlantUML; mermaid's grammar rejects them.
+%% approx: EightSidedShape() is drawn as a hexagon.
+C4Context
+    title Styled system context
+    AddElementTag("legacy", $bgColor="#c0504d", $fontColor="white", $borderColor="#8c2d2b", $legendText="Legacy system")
+    AddRelTag("async", $lineColor="#2b6cb0", $lineStyle=DashedLine())
+    Person(author, "Author", "Writes documents", $sprite="person")
+    System(md2pdf, "md2pdf", "Converts Markdown to PDF", $link="https://example.com/md2pdf")
+    System_Ext(mainframe, "Archive", "Keeps every PDF ever published", $tags="legacy")
+    System(search, "Search", "Indexes published documents")
+    Rel(author, md2pdf, "Runs")
+    Rel(md2pdf, mainframe, "Archives", "batch", $tags="async")
+    Rel(md2pdf, search, "Notifies", "webhook")
+    UpdateElementStyle(search, $bgColor="#2f855a", $fontColor="white", $borderColor="#22543d", $shape="EightSidedShape()")
+    UpdateRelStyle(author, md2pdf, $lineColor="#b7791f", $textColor="#b7791f", $offsetY="-12")
+    SHOW_LEGEND()

@@ -1,0 +1,16 @@
+%% showcase: Flowchart links to subgraphs
+%% prose: A link may name a subgraph instead of a node; it is drawn to the edge of the subgraph's box. The header asks for the ELK engine, which mmd answers with its own layout.
+%% approx: As in mermaid, a link to a subgraph is laid out as a link to one of its members (the first for a link in, the last for a link out) and cut where it meets the box.
+%% approx: A subgraph a link names keeps the chart's direction, even when it sets its own.
+%% approx: flowchart-elk is drawn with mmd's layered layout, not ELK's.
+flowchart-elk TB
+    request([Request]) --> gateway
+    subgraph gateway [API gateway]
+        auth[Check token] --> route{Route}
+    end
+    gateway -->|forwards| services
+    subgraph services [Services]
+        direction LR
+        docs[Documents] --> search[Search index]
+    end
+    services -.-> audit[(Audit log)]
