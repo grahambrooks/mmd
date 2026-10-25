@@ -1,0 +1,13 @@
+%% showcase: gantt axisFormat with ISO week numbers
+%% prose: `%V` is the ISO 8601 week and `%G` its week-numbering year, so the first ticks of January read `2025-W52`, then `2026-W01`… `%U` and `%W` count Sunday- and Monday-based weeks from the calendar year instead, starting at week 0.
+gantt
+    title Quarter plan
+    dateFormat YYYY-MM-DD
+    axisFormat %G-W%V
+    tickInterval 1week
+    weekday monday
+    section Plan
+    Discovery   :d1, 2025-12-22, 2w
+    Design      :d2, after d1, 3w
+    section Build
+    Build       :b1, after d2, 4w
