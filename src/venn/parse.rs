@@ -15,8 +15,8 @@
 use crate::style::{self, Colors};
 use crate::{Error, strip_comment};
 
-/// The most sets mmd draws; venn.js lays out any number by area.
-pub const MAX_SETS: usize = 3;
+/// The most sets mmd draws: regions are tracked as bit masks.
+pub const MAX_SETS: usize = 64;
 
 #[derive(Debug, Clone, Default)]
 pub struct Venn {
@@ -33,6 +33,8 @@ pub struct Set {
     /// `:20`. Mermaid defaults a set to 10.
     pub size: Option<f32>,
     pub colors: Colors,
+    /// The source line declaring it.
+    pub line: usize,
 }
 
 impl Set {
@@ -53,6 +55,8 @@ pub struct Union {
     pub label: Option<String>,
     pub size: Option<f32>,
     pub colors: Colors,
+    /// The source line declaring (or first styling) it.
+    pub line: usize,
 }
 
 /// A `text` item placed in the region of its sets.
@@ -63,6 +67,8 @@ pub struct TextNode {
     pub id: String,
     pub label: Option<String>,
     pub colors: Colors,
+    /// The source line declaring it.
+    pub line: usize,
 }
 
 impl TextNode {
@@ -152,6 +158,7 @@ pub fn parse(source: &str) -> Result<Venn, Error> {
                     label,
                     size,
                     colors: Colors::default(),
+                    line: number,
                 });
                 current = Some(vec![venn.sets.len() - 1]);
             }
@@ -174,6 +181,7 @@ pub fn parse(source: &str) -> Result<Venn, Error> {
                     label,
                     size,
                     colors: Colors::default(),
+                    line: number,
                 });
                 current = Some(sets);
             }
@@ -204,6 +212,7 @@ pub fn parse(source: &str) -> Result<Venn, Error> {
                     id,
                     label,
                     colors: Colors::default(),
+                    line: number,
                 });
             }
             "style" => style_statement(&mut venn, rest, number)?,
@@ -344,6 +353,7 @@ fn style_statement(venn: &mut Venn, rest: &str, line: usize) -> Result<(), Error
             label: None,
             size: None,
             colors: Colors::default(),
+            line,
         });
     }
     if let Some(union) = venn.unions.iter_mut().find(|u| u.sets == sets) {
@@ -469,9 +479,10 @@ mod tests {
         assert!(error.message.contains("multiple identifiers"));
         let error = parse("venn-beta\n set Foo\n union Foo,Buz\n").unwrap_err();
         assert!(error.message.contains("unknown set identifier"));
-        let error = parse("venn-beta\n set A\n set B\n set C\n set D\n").unwrap_err();
-        assert_eq!(error.line, 5);
-        assert!(error.message.contains("more than 3 sets"));
+        let many: String = (0..=MAX_SETS).map(|i| format!(" set S{i}\n")).collect();
+        let error = parse(&format!("venn-beta\n{many}")).unwrap_err();
+        assert_eq!(error.line, MAX_SETS + 2);
+        assert!(error.message.contains("more than 64 sets"));
         let error = parse("venn-beta\n set A,B\n").unwrap_err();
         assert_eq!(error.line, 2);
     }

@@ -1,0 +1,18 @@
+%% showcase: venn-beta with four sets
+%% prose: Four sets draw as the classic four-ellipse Venn diagram, in which every one of the fifteen regions exists, so any union of the four can be labelled. Each label sits at its region's roomiest point.
+%% approx: The ellipses are fixed and equal; mermaid sizes and places sets with venn.js so areas follow each set's and union's size. Here `:size` is ignored for four sets.
+%% approx: Ellipses are outlined, not filled with mermaid's translucent tint; a union's `fill` colours its label instead of shading the region.
+venn-beta
+    title Where the hours go
+    set Design
+        text Figma
+    set Build
+        text Rust
+    set Test
+    set Ship["Operate"]
+    union Design,Build["Prototypes"]
+    union Test,Ship["Canaries"]
+    union Build,Test["CI"]
+    union Design,Ship["Feedback"]
+    union Design,Build,Test,Ship["Retros"]
+    style Design fill:#e8590c
