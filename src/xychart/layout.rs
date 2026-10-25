@@ -1,7 +1,7 @@
 //! An xychart: a category (or numeric) axis, a value axis with round ticks,
 //! bars grouped side by side within each category, and lines over them.
 
-use diagram_scene::{Anchor, Font, Paint, Point, Rect, Role, Scene, Seg, Weight};
+use diagram_scene::{Anchor, Font, Paint, Point, Rect, Role, Scene, Seg, Text, Weight};
 
 use super::parse::{Plot, XData, XyChart};
 use crate::chart;
@@ -103,24 +103,13 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
             .map(|(_, l)| wrap(measure, l, small, false, (slot - 4.0).max(24.0)))
             .collect();
         let rows = wrapped.iter().map(Vec::len).max().unwrap_or(1) as f32;
-        let y_title_h = if c.y.title.is_some() {
-            FONT_SIZE * 1.6
-        } else {
-            0.0
-        };
-        let left = PADDING + tick_width + TICK + 4.0;
-        plot = Rect::new(left, top + y_title_h + small, cat_length, VALUE_LENGTH);
-        if let Some(t) = &c.y.title {
-            scene.texts.push(chart::text(
-                Point::new(PADDING, top + FONT_SIZE),
-                Anchor::Start,
-                t,
-                Font::Bold,
-                Paint::Role(Role::Text),
-            ));
-            right = PADDING + measure.width(t, FONT_SIZE, true);
-        } else {
-            right = 0.0;
+        // The value axis's title runs up its left, as mermaid rotates it.
+        let (room, reach) = side_title(&c.y.title, VALUE_LENGTH, small, measure);
+        let left = PADDING + room + tick_width + TICK + 4.0;
+        plot = Rect::new(left, top + small + reach, cat_length, VALUE_LENGTH);
+        right = 0.0_f32;
+        if let Some(t) = side_title_text(&c.y.title, plot) {
+            scene.texts.push(t);
         }
         for (((frac, _), lines), _) in labels.iter().zip(&wrapped).zip(0..) {
             let x = plot.x + frac * plot.width;
@@ -187,17 +176,24 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
         } else {
             0.0
         };
-        let left = PADDING + label_width + TICK + 4.0;
         let tick_row = small * 1.3 + TICK;
         let rows = wrapped.iter().map(Vec::len).max().unwrap_or(1) as f32;
         let band = MIN_SLOT.max(rows * line_h + 8.0);
+        let height = (slots as f32 * band).max(VALUE_LENGTH);
+        // The category axis is the left one here, and mermaid rotates the
+        // left axis's title whichever axis it is.
+        let (room, reach) = side_title(&c.x.title, height, 0.0, measure);
+        let left = PADDING + room + label_width + TICK + 4.0;
         plot = Rect::new(
             left,
-            top + y_title_h + tick_row,
+            top + y_title_h + tick_row + reach,
             VALUE_LENGTH * 1.6,
-            (slots as f32 * band).max(VALUE_LENGTH),
+            height,
         );
         right = plot.right();
+        if let Some(t) = side_title_text(&c.x.title, plot) {
+            scene.texts.push(t);
+        }
         if let Some(t) = &c.y.title {
             scene.texts.push(chart::text(
                 Point::new(plot.center().x, top + FONT_SIZE),
@@ -243,16 +239,11 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
             right = right.max(x + measure.width(label, small, false) / 2.0);
         }
         bottom = plot.bottom();
-        if let Some(t) = &c.x.title {
-            scene.texts.push(chart::text(
-                Point::new(PADDING, bottom + 8.0 + FONT_SIZE),
-                Anchor::Start,
-                t,
-                Font::Bold,
-                Paint::Role(Role::Text),
-            ));
-            right = right.max(PADDING + measure.width(t, FONT_SIZE, true));
-            bottom += 8.0 + FONT_SIZE * 1.35;
+    }
+    // A side title longer than the plot hangs below it.
+    for t in &scene.texts {
+        if t.rotate != 0.0 {
+            bottom = bottom.max(chart::text_rect(t, measure).bottom());
         }
     }
 
@@ -283,9 +274,9 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
             .push(chart::stroke(a, Paint::Role(Role::Line), Weight::Normal));
     }
 
-    // Bars grouped within each slot, and lines, in source order so a line
-    // declared after the bars is drawn over them, as mermaid does. Bars are
-    // hatched edges rather than nodes because nodes always paint last.
+    // Bars grouped within each slot, and lines. Bars are areas and lines
+    // edges, which paint over areas, so a line declared after the bars is
+    // drawn over them, as mermaid does.
     let bars: Vec<usize> = (0..c.series.len())
         .filter(|i| c.series[*i].plot == Plot::Bar)
         .collect();
@@ -314,7 +305,9 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
                     let x = plot.x + along * plot.width + offset;
                     Rect::new(x, y0.min(y1), bar, (y1 - y0).abs())
                 };
-                scene.edges.push(bar_edge(rect, paint));
+                scene
+                    .areas
+                    .push(chart::area(chart::rect_path(rect), paint, 1.0, None));
             }
             continue;
         }
@@ -365,21 +358,40 @@ pub(crate) fn layout(c: &XyChart, measure: &dyn Measure) -> Scene {
     scene
 }
 
-/// A bar, filled with heavy strokes; a hairline-thin bar is still drawn as
-/// one stroke so a small value stays visible.
-fn bar_edge(rect: Rect, paint: Paint) -> diagram_scene::Edge {
-    let corners = [
-        Point::new(rect.x, rect.y),
-        Point::new(rect.right(), rect.y),
-        Point::new(rect.right(), rect.bottom()),
-        Point::new(rect.x, rect.bottom()),
-    ];
-    // Close strokes, so the round caps barely scallop the bar's sides.
-    let mut path = chart::hatch(&corners, 2.5, 2.5);
-    if path.is_empty() {
-        path = chart::segment(rect.center(), rect.center());
+/// The room a left-side title takes across (its line height), and how far
+/// the plot must move down so a title longer than `length` (the plot's
+/// height, with `margin` above it already) is not cut off at the top.
+fn side_title(
+    title: &Option<String>,
+    length: f32,
+    margin: f32,
+    measure: &dyn Measure,
+) -> (f32, f32) {
+    match title {
+        Some(t) => {
+            let w = measure.width(t, Font::Bold.size(FONT_SIZE), true);
+            (
+                Font::Bold.size(FONT_SIZE) * 1.35,
+                (w / 2.0 - length / 2.0 - margin).max(0.0),
+            )
+        }
+        None => (0.0, 0.0),
     }
-    chart::stroke(path, paint, Weight::Heavy)
+}
+
+/// A left-side title, rotated to read upwards, centred on the plot.
+fn side_title_text(title: &Option<String>, plot: Rect) -> Option<Text> {
+    title.as_ref().map(|t| Text {
+        rotate: -90.0,
+        ..chart::text(
+            // The ascent lies to the left of the baseline once rotated.
+            Point::new(PADDING + Font::Bold.size(FONT_SIZE) * 0.8, plot.center().y),
+            Anchor::Middle,
+            t,
+            Font::Bold,
+            Paint::Role(Role::Text),
+        )
+    })
 }
 
 /// Where `v` falls on a numeric category axis from `a` to `b`, as a
@@ -430,12 +442,25 @@ mod tests {
                     "{header}: {expected}: {texts:?}"
                 );
             }
-            let bars = s
-                .edges
-                .iter()
-                .filter(|e| e.pen.weight == Weight::Heavy)
-                .count();
-            assert_eq!(bars, 4, "one bar per value");
+            assert_eq!(s.areas.len(), 4, "one bar per value");
+            for a in &s.areas {
+                assert_eq!(a.fill, Paint::Role(Role::Series(0)));
+                assert_eq!(a.opacity, 1.0);
+            }
+            assert!(
+                s.edges.iter().all(|e| e.pen.weight != Weight::Heavy),
+                "no hatching"
+            );
+            // The left axis's title reads upwards, as mermaid rotates it.
+            let left = if header.ends_with("horizontal") {
+                "Month"
+            } else {
+                "Revenue (in $)"
+            };
+            for t in &s.texts {
+                let rotated = t.line.plain() == left;
+                assert_eq!(t.rotate, if rotated { -90.0 } else { 0.0 }, "{header}");
+            }
             assert_inside(&s);
         }
     }
@@ -444,19 +469,39 @@ mod tests {
     fn bars_rise_from_zero_and_negative_bars_hang_below_it() {
         let s = scene("xychart\n  bar [3, -2]\n");
         let bars: Vec<Rect> = s
-            .edges
+            .areas
             .iter()
-            .filter(|e| e.pen.weight == Weight::Heavy)
-            .filter_map(|e| chart::bounds(chart::outline_points(&e.path)))
+            .filter_map(|a| chart::bounds(chart::outline_points(&a.path)))
             .collect();
         let (up, down) = (bars[0], bars[1]);
-        // Hatching is inset half a stroke from the bar's true edge.
-        assert!(
-            (up.bottom() + 2.5 - (down.y - 2.5)).abs() < 0.6,
-            "{up:?} {down:?}"
-        );
+        assert!((up.bottom() - down.y).abs() < 1e-3, "{up:?} {down:?}");
         assert!(s.texts().iter().any(|t| t == "-2"));
         assert_inside(&s);
+    }
+
+    #[test]
+    fn a_line_after_the_bars_draws_over_them() {
+        let s = scene("xychart\n  bar [3, 4]\n  line [2, 5]\n");
+        assert_eq!(s.areas.len(), 2);
+        // Areas paint under every edge.
+        assert!(
+            s.edges
+                .iter()
+                .any(|e| e.pen.paint == Paint::Role(Role::Series(1)))
+        );
+    }
+
+    #[test]
+    fn a_long_side_title_stays_inside() {
+        let long = "a value axis title far longer than the plot is tall, so it hangs off both ends";
+        // The left axis is the value axis upright, the category axis
+        // horizontal.
+        for source in [
+            format!("xychart\n  y-axis \"{long}\"\n  bar [1]\n"),
+            format!("xychart horizontal\n  x-axis \"{long}\" [a]\n  bar [1]\n"),
+        ] {
+            assert_inside(&scene(&source));
+        }
     }
 
     #[test]

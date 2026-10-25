@@ -11,6 +11,8 @@ use crate::{FONT_SIZE, PADDING};
 const RADIUS: f32 = 150.0;
 /// Mermaid's `curveTension`.
 const TENSION: f32 = 0.17;
+/// Mermaid's default `curveOpacity`.
+const OPACITY: f32 = 0.5;
 
 pub(crate) fn layout(r: &Radar, measure: &dyn Measure) -> Scene {
     let mut scene = Scene::new(0.0, 0.0);
@@ -68,10 +70,12 @@ pub(crate) fn layout(r: &Radar, measure: &dyn Measure) -> Scene {
             _ => closed(&points),
         };
         let paint = Paint::Role(Role::Series(k as u8));
-        // A sparse hatch reads as mermaid's half-transparent fill and lets
-        // the curves under it show through.
-        let fill = chart::hatch(&chart::outline_points(&outline), 4.0, 0.5);
-        scene.edges.push(chart::stroke(fill, paint, Weight::Thin));
+        // Half-transparent, so the curves under it show through. The
+        // outline is an edge rather than the area's stroke so it draws
+        // over the graticule, as mermaid's does.
+        scene
+            .areas
+            .push(chart::area(outline.clone(), paint, OPACITY, None));
         scene
             .edges
             .push(chart::stroke(outline, paint, Weight::Thick));
@@ -107,9 +111,10 @@ pub(crate) fn layout(r: &Radar, measure: &dyn Measure) -> Scene {
     }
     let (dx, dy) = (PADDING - extent.x, PADDING + title_h - extent.y);
     for e in &mut scene.edges {
-        for seg in &mut e.path {
-            move_seg(seg, dx, dy);
-        }
+        chart::move_path(&mut e.path, dx, dy);
+    }
+    for a in &mut scene.areas {
+        chart::move_path(&mut a.path, dx, dy);
     }
     for t in &mut scene.texts {
         t.pos = t.pos.offset(dx, dy);
@@ -139,18 +144,6 @@ pub(crate) fn layout(r: &Radar, measure: &dyn Measure) -> Scene {
     scene.width = width;
     scene.height = bottom + PADDING;
     scene
-}
-
-fn move_seg(seg: &mut Seg, dx: f32, dy: f32) {
-    match seg {
-        Seg::Move(p) | Seg::Line(p) => *p = p.offset(dx, dy),
-        Seg::Cubic(a, b, p) => {
-            *a = a.offset(dx, dy);
-            *b = b.offset(dx, dy);
-            *p = p.offset(dx, dy);
-        }
-        Seg::Close => {}
-    }
 }
 
 /// A closed polygon through `points`.
@@ -205,6 +198,30 @@ mod tests {
         ] {
             assert!(texts.iter().any(|t| t == expected), "{expected}: {texts:?}");
         }
+        assert_inside(&s);
+    }
+
+    #[test]
+    fn each_curve_is_a_translucent_area_under_its_outline() {
+        let s = scene("radar-beta\n  axis A, B, C\n  curve x{1, 2, 3}\n  curve y{3, 2, 1}\n");
+        assert_eq!(s.areas.len(), 2);
+        for (k, a) in s.areas.iter().enumerate() {
+            let paint = Paint::Role(Role::Series(k as u8));
+            assert_eq!(a.fill, paint);
+            assert_eq!(a.opacity, OPACITY);
+            assert!(
+                s.edges
+                    .iter()
+                    .any(|e| e.path == a.path && e.pen.paint == paint),
+                "outline of curve {k}"
+            );
+        }
+        // Graticule (1..=ticks), axes and two outlines: no hatching.
+        assert!(
+            s.edges.iter().all(
+                |e| e.pen.weight != Weight::Thin || e.pen.paint != Paint::Role(Role::Series(0))
+            )
+        );
         assert_inside(&s);
     }
 

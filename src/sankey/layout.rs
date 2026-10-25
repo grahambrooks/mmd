@@ -4,7 +4,6 @@
 
 use diagram_scene::{
     Anchor, Font, Node, Paint, Point, Rect, Role, Run, Scene, Seg, Shape, Style, Text, TextLine,
-    Weight,
 };
 
 use super::parse::Sankey;
@@ -17,9 +16,10 @@ const HEIGHT: f32 = 400.0;
 const NODE_WIDTH: f32 = 10.0;
 /// Mermaid's 12 px node padding plus 15 for the value it shows.
 const NODE_GAP: f32 = 27.0;
-/// Ribbon strands are 1 px strokes this far apart: half covered, so
-/// ribbons read as mermaid's half-transparent ones.
-const STRAND: f32 = 2.0;
+/// Mermaid's link `stroke-opacity`.
+const OPACITY: f32 = 0.5;
+/// The thinnest a ribbon is drawn, as mermaid's `max(1, width)`.
+const MIN_RIBBON: f32 = 1.0;
 
 pub(crate) fn layout(s: &Sankey, measure: &dyn Measure) -> Scene {
     let n = s.nodes.len();
@@ -186,20 +186,32 @@ pub(crate) fn layout(s: &Sankey, measure: &dyn Measure) -> Scene {
     let mut scene = Scene::new(0.0, 0.0);
     for (k, l) in s.links.iter().enumerate() {
         let w = l.value as f32 * ky;
+        // A flow thinner than the least ribbon is widened about its middle.
+        let grow = (MIN_RIBBON - w).max(0.0) / 2.0;
+        let (w, top0, top1) = (w + 2.0 * grow, out_at[k] - grow, in_at[k] - grow);
         let (x0, x1) = (x[l.source] + NODE_WIDTH, x[l.target]);
         let mid = (x0 + x1) / 2.0;
-        let strands = ((w / STRAND).round() as usize).max(1);
-        let mut path = Vec::new();
-        for j in 0..strands {
-            let f = (j as f32 + 0.5) / strands as f32 * w;
-            let (a, b) = (Point::new(x0, out_at[k] + f), Point::new(x1, in_at[k] + f));
-            path.push(Seg::Move(a));
-            path.push(Seg::Cubic(Point::new(mid, a.y), Point::new(mid, b.y), b));
-        }
-        scene.edges.push(chart::stroke(
+        // Along the top, down the target's side, back along the bottom.
+        let path = vec![
+            Seg::Move(Point::new(x0, top0)),
+            Seg::Cubic(
+                Point::new(mid, top0),
+                Point::new(mid, top1),
+                Point::new(x1, top1),
+            ),
+            Seg::Line(Point::new(x1, top1 + w)),
+            Seg::Cubic(
+                Point::new(mid, top1 + w),
+                Point::new(mid, top0 + w),
+                Point::new(x0, top0 + w),
+            ),
+            Seg::Close,
+        ];
+        scene.areas.push(chart::area(
             path,
             Paint::Role(Role::Series(l.source as u8)),
-            Weight::Thin,
+            OPACITY,
+            None,
         ));
     }
 
@@ -283,18 +295,8 @@ fn move_all(scene: &mut Scene, dx: f32) {
     for t in &mut scene.texts {
         t.pos.x += dx;
     }
-    for e in &mut scene.edges {
-        for seg in &mut e.path {
-            match seg {
-                Seg::Move(p) | Seg::Line(p) => p.x += dx,
-                Seg::Cubic(a, b, p) => {
-                    a.x += dx;
-                    b.x += dx;
-                    p.x += dx;
-                }
-                Seg::Close => {}
-            }
-        }
+    for a in &mut scene.areas {
+        chart::move_path(&mut a.path, dx, 0.0);
     }
 }
 
@@ -315,7 +317,13 @@ mod tests {
             assert!(texts.iter().any(|t| t == expected), "{expected}: {texts:?}");
         }
         assert_eq!(s.nodes.len(), 4);
-        assert_eq!(s.edges.len(), 4);
+        assert_eq!(s.areas.len(), 4, "one ribbon per flow");
+        assert!(s.edges.is_empty(), "no strands");
+        for (a, source) in s.areas.iter().zip([0u8, 0, 1, 2]) {
+            assert_eq!(a.fill, Paint::Role(Role::Series(source)));
+            assert_eq!(a.opacity, OPACITY);
+            assert_eq!(a.path.last(), Some(&Seg::Close));
+        }
         assert_inside(&s);
     }
 
@@ -339,6 +347,7 @@ mod tests {
     fn zero_flows_still_render() {
         let s = scene("sankey\nA,B,0\n");
         assert_inside(&s);
+        assert_eq!(s.areas.len(), 1);
         assert!(s.texts().iter().any(|t| t == "B 0"));
     }
 }
