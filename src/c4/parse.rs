@@ -195,7 +195,7 @@ pub enum LineStyle {
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RelStyle {
     pub line_color: Option<Rgb>,
-    /// `textColor`. Parsed and kept, but the scene has no per-label colour.
+    /// `textColor`: the label's colour.
     pub text_color: Option<Rgb>,
     pub line: Option<LineStyle>,
     /// `offsetX`/`offsetY`: where the label moves from the curve's middle.

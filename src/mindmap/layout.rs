@@ -1,11 +1,11 @@
 //! A two-sided tidy tree: the root in the middle, its branches shared
 //! between the right and the left, each subtree stacked so siblings never
 //! overlap and a parent sits centred on its children. Each branch takes a
-//! series colour for its outlines and curves.
+//! series colour for its outlines, curves and a translucent fill.
 
 use diagram_scene::{
-    Edge, Font, Marker, Node, Paint, Pen, Role, Scene, Seg, Shape, Weight, geom::Point, geom::Rect,
-    route, shape::natural_size,
+    Area, Edge, Font, Marker, Node, Paint, Pen, Role, Scene, Seg, Shape, Weight, geom::Point,
+    geom::Rect, route, shape::natural_size,
 };
 
 use super::parse::{Mindmap, NodeShape};
@@ -17,6 +17,8 @@ const LABEL_WIDTH: f32 = 200.0;
 /// Between a parent and its children, and between sibling subtrees.
 const H_GAP: f32 = 48.0;
 const V_GAP: f32 = 12.0;
+/// A non-root node's branch tint.
+const NODE_OPACITY: f32 = 0.25;
 
 pub fn layout(map: &Mindmap, measure: &dyn Measure) -> Scene {
     let mut nodes: Vec<Node> = map
@@ -111,6 +113,16 @@ pub fn layout(map: &Mindmap, measure: &dyn Measure) -> Scene {
     }
     let mut scene = Scene::new(bounds.width + 2.0 * PADDING, bounds.height + 2.0 * PADDING);
     scene.font_size = FONT_SIZE;
+    // Mermaid fills a node with its branch's colour. The theme's series
+    // colours are strong, so here it is a translucent tint under a clear
+    // shape, which keeps the theme's text readable on it.
+    for (i, node) in nodes.iter_mut().enumerate().skip(1) {
+        node.style.fill = Paint::None;
+        let body = diagram_scene::shape::outline(node.shape, node.rect).body;
+        let mut tint = Area::new(body, Paint::Role(Role::Series(branch[i])));
+        tint.opacity = NODE_OPACITY;
+        scene.areas.push(tint);
+    }
     scene.nodes = nodes;
     scene.edges = edges;
     scene
@@ -265,5 +277,18 @@ mod tests {
             .map(|i| s.node(&format!("n{i}")).unwrap().rect.center().x > root)
             .collect();
         assert!(sides.contains(&true) && sides.contains(&false), "{sides:?}");
+    }
+
+    #[test]
+    fn nodes_are_tinted_with_their_branch_colour() {
+        let s = scene();
+        // The root is solid; every other node a clear shape over its tint.
+        assert_eq!(s.areas.len(), s.nodes.len() - 1);
+        for (area, node) in s.areas.iter().zip(&s.nodes[1..]) {
+            assert_eq!(area.opacity, NODE_OPACITY);
+            assert_eq!(area.fill, node.style.stroke);
+            assert_eq!(node.style.fill, Paint::None);
+        }
+        assert_eq!(s.areas[0].fill, Paint::Role(Role::Series(0)));
     }
 }

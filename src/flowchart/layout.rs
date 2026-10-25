@@ -454,8 +454,11 @@ impl<'a> Ctx<'a> {
             edge.start = marker(link.start);
             edge.end = marker(link.end);
             if let (Some(lines), Some(pos)) = (self.labels[i].clone(), label_pos) {
-                edge.labels
-                    .push(EdgeLabel::new(pos, lines, true, self.measure, FONT_SIZE));
+                let mut label = EdgeLabel::new(pos, lines, true, self.measure, FONT_SIZE);
+                if let Some((r, g, b)) = chart.link_style(link).color {
+                    label.paint = Paint::Rgb(r, g, b);
+                }
+                edge.labels.push(label);
             }
             block.edges.push((i, edge));
         }
@@ -662,8 +665,8 @@ fn marker(end: End) -> Marker {
     }
 }
 
-/// A link's line: its kind, then any `linkStyle`. A label's `color` has
-/// nowhere to go — edge labels take the theme's text colour.
+/// A link's line: its kind, then any `linkStyle`. (A `linkStyle`'s `color`
+/// colours the link's label instead.)
 fn pen(chart: &Flowchart, i: usize) -> Pen {
     let link = &chart.links[i];
     let mut pen = Pen {
@@ -1100,6 +1103,17 @@ mod tests {
         assert_eq!(s.edges[2].pen.dash, Dash::Dotted);
         // Its own linkStyle replaces the default, as in mermaid.
         assert_eq!(s.edges[2].pen.paint, Paint::Role(diagram_scene::Role::Line));
+    }
+
+    #[test]
+    fn a_link_style_color_paints_the_label() {
+        let s =
+            scene("flowchart TD\n  A -->|yes| B -->|no| C\n  linkStyle 0 stroke:#00f,color:#c00\n");
+        assert_eq!(s.edges[0].labels[0].paint, Paint::Rgb(0xcc, 0, 0));
+        assert_eq!(
+            s.edges[1].labels[0].paint,
+            Paint::Role(diagram_scene::Role::Muted)
+        );
     }
 
     #[test]

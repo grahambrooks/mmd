@@ -95,7 +95,7 @@ pub struct LinkStyle {
     /// `stroke-width` in px.
     pub width: Option<f32>,
     pub dash: Option<Stroke>,
-    /// The label's `color`. Parsed, but the scene has no per-label colour.
+    /// The label's `color`.
     pub color: Option<Rgb>,
 }
 
