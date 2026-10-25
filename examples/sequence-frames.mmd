@@ -1,0 +1,38 @@
+%% showcase: sequenceDiagram with nested frames
+%% prose: Combined fragments nest: each frame is widened to hold what it contains plus a margin, so an inner frame always sits inside its parent. The operator is in the corner tab, its condition in brackets across the top, and else, and and option sections are split by dashed dividers. A rect tints the region behind its messages.
+%% approx: Section conditions are centred under their divider; mermaid centres them too but in a smaller font.
+%% approx: A translucent rect colour (rgba) is blended over white, so it stays light on the dark theme.
+sequenceDiagram
+    participant C as Client
+    participant G as Gateway
+    participant A as Auth
+    participant D as Database
+
+    C->>G: GET /orders
+    critical Validate the token
+        G->>A: Verify
+        A-->>G: Valid
+    option Token expired
+        G-->>C: 401 Unauthorized
+    end
+    rect rgba(0, 120, 255, 0.12)
+        loop Each page of results
+            G->>D: SELECT … LIMIT 50
+            alt Rows found
+                D-->>G: Rows
+                opt Cache enabled
+                    G->>G: Store in cache
+                end
+            else No rows
+                D-->>G: Empty
+            end
+        end
+    end
+    par Notify analytics
+        G-)A: Audit event
+    and Respond
+        G-->>C: 200 OK
+    end
+    break Client went away
+        G--xC: Connection reset
+    end
