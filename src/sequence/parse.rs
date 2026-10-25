@@ -84,7 +84,7 @@ pub struct Message {
     pub dot_from: bool,
     pub dot_to: bool,
     /// The `autonumber` number, when numbering is on.
-    pub number: Option<u32>,
+    pub number: Option<Number>,
     /// `create`: this message brings `to` into being.
     pub creates: bool,
     /// `destroy`: participants whose lifelines end at this message.
@@ -260,6 +260,53 @@ pub fn parse(source: &str) -> Result<Sequence, Error> {
     Ok(p.seq)
 }
 
+/// An `autonumber` value. Mermaid's lexer takes at most two decimals
+/// (`1.1`, `.25`) and rounds each sum to hundredths, so counting in
+/// whole hundredths reproduces it without `1.2000000000000002`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Number(pub u32);
+
+impl Number {
+    pub const ONE: Number = Number(100);
+
+    /// `12`, `1.5`, `0.25` or `.5`; anything else is `None`.
+    fn parse(s: &str) -> Option<Number> {
+        let (int, frac) = match s.split_once('.') {
+            Some((_, "")) => return None,
+            Some(parts) => parts,
+            None => (s, ""),
+        };
+        let digits = |d: &str| d.bytes().all(|b| b.is_ascii_digit());
+        if !digits(int) || !digits(frac) || frac.len() > 2 || (int.is_empty() && frac.is_empty()) {
+            return None;
+        }
+        let int: u32 = if int.is_empty() { 0 } else { int.parse().ok()? };
+        let frac: u32 = match frac.len() {
+            0 => 0,
+            1 => frac.parse::<u32>().ok()? * 10,
+            _ => frac.parse().ok()?,
+        };
+        int.checked_mul(100)?.checked_add(frac).map(Number)
+    }
+
+    /// The value when it is whole.
+    pub fn whole(self) -> Option<u32> {
+        self.0.is_multiple_of(100).then_some(self.0 / 100)
+    }
+}
+
+impl std::fmt::Display for Number {
+    /// As JavaScript prints it: `2`, `1.1`, `1.25`, never `1.10`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (int, frac) = (self.0 / 100, self.0 % 100);
+        match frac {
+            0 => write!(f, "{int}"),
+            _ if frac.is_multiple_of(10) => write!(f, "{int}.{}", frac / 10),
+            _ => write!(f, "{int}.{frac:02}"),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Parser {
     seq: Sequence,
@@ -270,9 +317,9 @@ struct Parser {
     /// Activation depth per participant.
     active: Vec<u32>,
     /// `autonumber`: the next number and the step, while on.
-    numbering: Option<(u32, u32)>,
-    next_number: u32,
-    step: u32,
+    numbering: Option<(Number, Number)>,
+    next_number: Number,
+    step: Number,
     pending_create: Option<(usize, usize)>,
     pending_destroy: Vec<(usize, usize)>,
 }
@@ -577,16 +624,16 @@ impl Parser {
     }
 
     fn autonumber(&mut self, rest: &str, line: usize) -> Result<(), Error> {
-        if self.step == 0 {
-            self.next_number = 1;
-            self.step = 1;
+        if self.step == Number(0) {
+            self.next_number = Number::ONE;
+            self.step = Number::ONE;
         }
         let words: Vec<&str> = rest.split_whitespace().collect();
         let number = |w: &str| {
-            w.parse::<u32>().map_err(|_| {
+            Number::parse(w).ok_or_else(|| {
                 Error::new(
                     line,
-                    format!("`autonumber {rest}`: expected whole numbers or `off`"),
+                    format!("`autonumber {rest}`: `{w}` is not a number with at most two decimals"),
                 )
             })
         };
@@ -595,8 +642,8 @@ impl Parser {
             [off] if off.eq_ignore_ascii_case("off") => self.numbering = None,
             [start] => {
                 self.next_number = number(start)?;
-                self.step = 1;
-                self.numbering = Some((self.next_number, 1));
+                self.step = Number::ONE;
+                self.numbering = Some((self.next_number, self.step));
             }
             [start, step] => {
                 self.next_number = number(start)?;
@@ -683,7 +730,7 @@ impl Parser {
 
         if let Some((number, step)) = self.numbering {
             message.number = Some(number);
-            self.next_number = number + step;
+            self.next_number = Number(number.0 + step.0);
             self.numbering = Some((self.next_number, step));
         }
         let (activate, deactivate) = (message.activate, message.deactivate);
@@ -1129,7 +1176,41 @@ mod tests {
         )
         .unwrap();
         let numbers: Vec<_> = messages(&seq).iter().map(|m| m.number).collect();
-        assert_eq!(numbers, [Some(10), Some(15), None]);
+        assert_eq!(numbers, [Some(Number(1000)), Some(Number(1500)), None]);
+    }
+
+    #[test]
+    fn autonumber_takes_decimals_without_float_drift() {
+        let mut src = String::from("sequenceDiagram\nautonumber 1.1 0.1\n");
+        for _ in 0..12 {
+            src.push_str("A->>B: m\n");
+        }
+        let seq = parse(&src).unwrap();
+        let shown: Vec<String> = messages(&seq)
+            .iter()
+            .map(|m| m.number.unwrap().to_string())
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2", "2.1", "2.2"
+            ]
+        );
+        let seq = parse("sequenceDiagram\nautonumber .25 .25\nA->>B: a\nA->>B: b\n").unwrap();
+        let shown: Vec<String> = messages(&seq)
+            .iter()
+            .map(|m| m.number.unwrap().to_string())
+            .collect();
+        assert_eq!(shown, ["0.25", "0.5"]);
+    }
+
+    #[test]
+    fn autonumber_rejects_three_decimals() {
+        let error = parse("sequenceDiagram\nautonumber 1.125\nA->>B: a\n").unwrap_err();
+        assert_eq!(error.line, 2);
+        assert!(error.message.contains("1.125"), "{error}");
+        assert!(parse("sequenceDiagram\nautonumber 1.\n").is_err());
+        assert!(parse("sequenceDiagram\nautonumber x\n").is_err());
     }
 
     #[test]

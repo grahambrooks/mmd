@@ -40,7 +40,8 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
                 .iter()
                 .map(|card| {
                     let lines = wrap(measure, &card.label, FONT_SIZE, false, text_width);
-                    let meta = card.ticket.is_some() || card.assigned.is_some();
+                    let meta =
+                        card.ticket.is_some() || card.assigned.is_some() || card.icon.is_some();
                     let height = 2.0 * PAD
                         + lines.len() as f32 * line_height
                         + if meta { small * 1.35 + 4.0 } else { 0.0 };
@@ -130,9 +131,30 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
             }
             if placed.meta {
                 let meta_y = y + placed.height - PAD - small * 0.25;
+                let mut ticket_x = left + text_left;
+                // No icon fonts: the icon's name, as a small muted tag.
+                if let Some(icon) = &card.icon {
+                    let name = icon_name(icon);
+                    let width = measure.width(name, small, false) + 10.0;
+                    let height = small * 1.35;
+                    let mut tag = Node::new(
+                        format!("card:{}:icon", card.id),
+                        Shape::Stadium,
+                        Rect::new(ticket_x, meta_y - small * 0.95, width, height),
+                    );
+                    tag.label = vec![TextLine::new(name, Font::Small)];
+                    tag.style = Style {
+                        fill: Paint::Role(Role::Surface),
+                        stroke: Paint::Role(Role::Muted),
+                        text: Paint::Role(Role::Muted),
+                        ..Style::for_shape(Shape::Stadium)
+                    };
+                    scene.nodes.push(tag);
+                    ticket_x += width + 6.0;
+                }
                 if let Some(ticket) = &card.ticket {
                     scene.texts.push(Text {
-                        pos: Point::new(left + text_left, meta_y),
+                        pos: Point::new(ticket_x, meta_y),
                         anchor: Anchor::Start,
                         line: TextLine::new(ticket.clone(), Font::Small),
                         paint: Paint::Role(Role::Muted),
@@ -168,6 +190,17 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
     scene
 }
 
+/// An icon's name without its pack's prefix: `fa fa-book` and
+/// `fa:fa-book` read `book`; a bare `heart` stays itself.
+fn icon_name(icon: &str) -> &str {
+    let last = icon
+        .rsplit(|c: char| c.is_whitespace() || c == ':')
+        .next()
+        .unwrap_or(icon);
+    let name = last.strip_prefix("fa-").unwrap_or(last);
+    if name.is_empty() { icon } else { name }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,7 +219,9 @@ mod tests {
     b[Draw cards]
   doing[In progress]
     c[Layout]@{ priority: 'Very High' }
+    ::icon(fa fa-ruler)
   done[Done]
+    d[Ship]@{ icon: heart, ticket: MMD-2 }
 ";
 
     #[test]
@@ -202,6 +237,8 @@ mod tests {
             "MMD-1",
             "graham",
             "mermaid accepts",
+            "ruler",
+            "heart",
         ] {
             assert!(texts.contains(expected), "missing {expected}: {texts}");
         }
@@ -213,7 +250,7 @@ mod tests {
         let cards: Vec<_> = scene
             .nodes
             .iter()
-            .filter(|n| !n.id.ends_with(":priority"))
+            .filter(|n| !n.id.ends_with(":priority") && !n.id.ends_with(":icon"))
             .collect();
         for (i, a) in cards.iter().enumerate() {
             for b in &cards[i + 1..] {
@@ -223,5 +260,31 @@ mod tests {
         let todo = scene.containers[0].rect;
         assert!(todo.encloses(&scene.node("card:a").unwrap().rect, 0.01));
         assert!(scene.bounds().encloses(&todo, 0.01));
+    }
+
+    #[test]
+    fn an_icon_is_a_tag_inside_its_card_before_the_ticket() {
+        let scene = layout(&parse(SOURCE).unwrap(), &Fixed);
+        let card = scene.node("card:d").unwrap().rect;
+        let tag = scene.node("card:d:icon").unwrap();
+        assert_eq!(tag.label[0].plain(), "heart");
+        assert!(card.encloses(&tag.rect, 0.01));
+        let ticket = scene
+            .texts
+            .iter()
+            .find(|t| t.line.plain() == "MMD-2")
+            .unwrap();
+        assert!(ticket.pos.x >= tag.rect.right());
+        // An icon alone still gets the metadata row.
+        let layout_card = scene.node("card:c").unwrap().rect;
+        assert!(layout_card.encloses(&scene.node("card:c:icon").unwrap().rect, 0.01));
+    }
+
+    #[test]
+    fn icon_names_lose_their_pack_prefix() {
+        assert_eq!(icon_name("fa fa-book"), "book");
+        assert_eq!(icon_name("fa:fa-book"), "book");
+        assert_eq!(icon_name("heart"), "heart");
+        assert_eq!(icon_name("mdi:rocket"), "rocket");
     }
 }

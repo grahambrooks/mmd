@@ -1,0 +1,9 @@
+%% showcase: sequenceDiagram autonumber with decimals
+%% prose: `autonumber 1.1 0.1` starts numbering at 1.1 and steps by a tenth. As in mermaid, start and step take at most two decimals and each sum is rounded to hundredths, so 1.1 is followed by 1.2, never 1.2000000000000002.
+%% approx: Mermaid shrinks the font to fit a long number in its fixed circle; mmd keeps the size and stretches the circle into a pill.
+sequenceDiagram
+    autonumber 1.1 0.1
+    Alice->>Bob: Hello
+    Bob-->>Alice: Hi
+    Alice->>Bob: How are you?
+    Bob-->>Alice: Fine
