@@ -1,0 +1,74 @@
+examples/gantt.mmd
+  s_0c7b5d39344b95::t_90e80408d3f40b 1-21
+examples/gaps/kanban-icon.mmd
+  s_0c7b5d39344b95::t_d872a93e282b21 1-5
+src/journey/parse.rs
+  s_0c7b5d39344b95::t_ea0f65049a57e7 1-193
+src/lib.rs
+  s_0c7b5d39344b95::t_b6633d2f3e2814 18,20-21,25,52-55,70-73,87-90,194-197
+examples/gantt-excludes.mmd
+  s_0c7b5d39344b95::t_1abc4ae768ea24 1-20
+examples/kanban.mmd
+  s_0c7b5d39344b95::t_3834f2c46fe57c 1-22
+examples/timeline.mmd
+  s_0c7b5d39344b95::t_c649a0142768a7 1-15
+src/journey/mod.rs
+  s_0c7b5d39344b95::t_841a860e443bc9 1-17
+src/gantt/mod.rs
+  s_0c7b5d39344b95::t_3f64b5365d16fa 1-18
+src/kanban/mod.rs
+  s_0c7b5d39344b95::t_15602aee4759c7 1-17
+src/kanban/layout.rs
+  s_0c7b5d39344b95::t_9ace14b5f042bc 64
+  s_0c7b5d39344b95::t_7c00628563a8f2 1-63,65-227
+src/timeline/mod.rs
+  s_0c7b5d39344b95::t_59d65a83a63c8b 1-17
+examples/timeline-td.mmd
+  s_0c7b5d39344b95::t_6ddcbaf8dab98a 1-9
+src/gantt/parse.rs
+  s_0c7b5d39344b95::t_1e48b5dbef23c6 1-246,248-560,562-770,776-785
+  s_0c7b5d39344b95::t_9ace14b5f042bc 247,561,771-775
+src/gantt/date.rs
+  s_0c7b5d39344b95::t_9e75d56893f592 1-163,165-173,175-323,329-584
+  s_0c7b5d39344b95::t_7316d5032054e7 164,174
+  s_0c7b5d39344b95::t_9ace14b5f042bc 324-328
+src/timeline/parse.rs
+  s_0c7b5d39344b95::t_cf923032918a69 1-119,127-185,187-227
+  s_0c7b5d39344b95::t_9ace14b5f042bc 120-126,186
+src/journey/layout.rs
+  s_0c7b5d39344b95::t_6a9f8f65ac986f 1-205,210-218,223-380
+  s_0c7b5d39344b95::t_9ace14b5f042bc 206-209,219-222
+src/kanban/parse.rs
+  s_0c7b5d39344b95::t_e2b1d819299228 1-338
+examples/journey.mmd
+  s_0c7b5d39344b95::t_f14a516c96f796 1-15
+examples/gaps/gantt-week-numbers.mmd
+  s_0c7b5d39344b95::t_1ce3d7ba1c805c 1-6
+src/timeline/layout.rs
+  s_0c7b5d39344b95::t_4f13c8af51c4f3 1-5,8-112,114-122,127-142,144-337
+  s_0c7b5d39344b95::t_59d65a83a63c8b 113,123-126,143
+  s_0c7b5d39344b95::t_9ace14b5f042bc 6-7
+src/gantt/layout.rs
+  s_0c7b5d39344b95::t_8712f65863e62b 1-28,52-57,59-73,75-84,86-88,93-188,191-212,215-246,249-256,258-262,264-487,491-595
+  s_0c7b5d39344b95::t_3f64b5365d16fa 58
+  s_0c7b5d39344b95::t_9ace14b5f042bc 74,247-248,488-490
+  s_0c7b5d39344b95::t_64cdc6a9f8a7e4 29-51,85,89-92,189-190,213-214,257,263
+examples/gaps/gantt-month-names.mmd
+  s_0c7b5d39344b95::t_e08cb3bf4fe1b5 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "03ce4ecf2fba51373276f570ccbf1eba78f1c314",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
