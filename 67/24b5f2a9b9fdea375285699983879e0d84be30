@@ -1,0 +1,33 @@
+src/sequence/mod.rs
+  s_0c7b5d39344b95::t_f682fe3f989b13 7
+src/zenuml/parse.rs
+  s_0c7b5d39344b95::t_f682fe3f989b13 25,1293-1297,1363-1367,1371-1375
+  s_0c7b5d39344b95::t_05a286d44f787f 1279-1292,1298-1362,1368-1370,1376-1399
+  s_0c7b5d39344b95::t_b107f86e87a0be 21-22,301,328-329,570-624,960-965,1260-1261
+src/sequence/parse.rs
+  s_0c7b5d39344b95::t_b1a31d6f9a620c 170-185
+examples/zenuml-divider.mmd
+  s_0c7b5d39344b95::t_ba1a050593d48f 1-8
+src/sequence/layout.rs
+  s_0c7b5d39344b95::t_6da631f716b279 464,875-876,882
+  s_0c7b5d39344b95::t_f90756230ed8c0 20,146-147,388-394,465,862-874,877-881,883-978
+  s_0c7b5d39344b95::t_89a2810ed61410 979
+examples/zenuml-ref.mmd
+  s_0c7b5d39344b95::t_ba1a050593d48f 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6724b5f2a9b9fdea375285699983879e0d84be30",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
