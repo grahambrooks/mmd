@@ -9,6 +9,7 @@ use mmd::geom::Rect;
 const GITGRAPH: &str = include_str!("../examples/gitgraph.mmd");
 const C4: &str = include_str!("../examples/c4.mmd");
 const FLOWCHART: &str = include_str!("../examples/flowchart.mmd");
+const ER: &str = include_str!("../examples/er.mmd");
 
 fn fonts() -> mmd::text::BundledFonts {
     mmd::text::BundledFonts::new().expect("bundled fonts load")
@@ -36,7 +37,7 @@ fn drawn(scene: &Scene) -> Rect {
 
 #[test]
 fn both_samples_render_to_svg() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, C4, FLOWCHART, ER] {
         let svg = mmd::render(source).expect("sample renders");
         assert!(svg.starts_with("<svg"), "{}", &svg[..40.min(svg.len())]);
         assert!(svg.trim_end().ends_with("</svg>"));
@@ -45,7 +46,7 @@ fn both_samples_render_to_svg() {
 
 #[test]
 fn output_is_never_html_in_disguise() {
-    for source in [GITGRAPH, C4, FLOWCHART] {
+    for source in [GITGRAPH, C4, FLOWCHART, ER] {
         let svg = mmd::render(source).unwrap();
         // The whole point of the crate: SVG-only consumers must keep the text.
         assert!(!svg.contains("foreignObject"), "labels must be SVG text");
@@ -116,6 +117,7 @@ fn everything_drawn_stays_inside_the_reported_bounds() {
         mmd::gitgraph::scene(GITGRAPH, &fonts()).unwrap(),
         mmd::c4::scene(C4, &fonts()).unwrap(),
         mmd::flowchart::scene(FLOWCHART, &fonts()).unwrap(),
+        mmd::er::scene(ER, &fonts()).unwrap(),
     ] {
         let bounds = scene.bounds();
         let drawn = drawn(&scene);
@@ -224,5 +226,47 @@ fn flowcharts_flow_in_their_direction() {
         let scene = mmd::flowchart::scene(&source, &fonts()).unwrap();
         let r = |id: &str| scene.node(id).unwrap().rect;
         assert!(check(r("A"), r("B")) && check(r("B"), r("C")), "{dir}");
+    }
+}
+
+#[test]
+fn every_er_entity_attribute_and_relationship_reaches_the_scene() {
+    let model = mmd::er::parse(ER).unwrap();
+    let scene = mmd::er::scene(ER, &fonts()).unwrap();
+    let texts = scene.texts();
+    let has = |expected: &str| {
+        assert!(
+            texts.iter().any(|t| t == expected),
+            "missing {expected}: {texts:?}"
+        )
+    };
+    assert_eq!(scene.nodes.len(), model.entities.len());
+    for entity in &model.entities {
+        has(entity.label());
+        for attribute in &entity.attributes {
+            has(&attribute.kind);
+            has(&attribute.name);
+            if !attribute.keys.is_empty() {
+                has(&attribute.keys.join(", "));
+            }
+            if let Some(comment) = &attribute.comment {
+                has(comment);
+            }
+        }
+    }
+    assert_eq!(scene.edges.len(), model.relationships.len());
+    for relationship in &model.relationships {
+        has(&relationship.label);
+    }
+}
+
+#[test]
+fn er_entities_never_overlap() {
+    let scene = mmd::er::scene(ER, &fonts()).unwrap();
+    let boxes = rects(&scene);
+    for (i, a) in boxes.iter().enumerate() {
+        for b in &boxes[i + 1..] {
+            assert!(!a.intersects(b), "{a:?} overlaps {b:?}");
+        }
     }
 }
