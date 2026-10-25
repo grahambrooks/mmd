@@ -1,0 +1,67 @@
+src/sankey/mod.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-17
+examples/pie.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-12
+src/quadrant/layout.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-302
+examples/quadrant.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-20
+examples/xychart-horizontal.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-8
+examples/radar.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-14
+src/chart.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-445
+src/lib.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 16,26-28,30,36,68-72,95-99,121-125,138-139,243-247,296-308,345-346
+examples/sankey.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-20
+examples/xychart.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-12
+src/pie/layout.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-144
+src/pie/parse.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-140
+src/quadrant/mod.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-17
+src/quadrant/parse.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-276
+src/radar/parse.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-503
+src/sankey/parse.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-201
+src/xychart/layout.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-480
+examples/gaps/xychart-data-labels.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-13
+src/xychart/parse.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-307
+src/radar/layout.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-221
+src/radar/mod.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-17
+src/sankey/layout.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-343
+src/xychart/mod.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-17
+src/pie/mod.rs
+  s_0c7b5d39344b95::t_190d4a450835c6 1-17
+examples/radar-polygon.mmd
+  s_0c7b5d39344b95::t_190d4a450835c6 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51d35b147e4fd901c992ccd88800c9db0601a26f",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
