@@ -58,9 +58,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Sample {
             heading: "C4Context",
             prose: "Elements are placed on a grid in declaration order, and relationships \
-                    curve between the sides that face each other. Labels sit on pills \
-                    so they stay readable where they cross a line.",
+                    curve between the sides that face each other, under a row rather than \
+                    through an element. Labels sit on pills so they stay readable where \
+                    they cross a line.",
             source: include_str!("c4.mmd"),
+        },
+        Sample {
+            heading: "C4Container",
+            prose: "Boundaries are dashed boxes holding a grid of their own, nested as \
+                    deep as the source nests them. Databases are cylinders, queues lie \
+                    on their side, and external elements are grey; a BiRel has an \
+                    arrowhead at each end.",
+            source: include_str!("c4-container.mmd"),
         },
         Sample {
             heading: "erDiagram",
