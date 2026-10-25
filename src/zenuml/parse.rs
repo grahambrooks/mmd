@@ -18,9 +18,11 @@
 //! - `new A(args)` creates `A`.
 //! - `if`/`else` is `alt`, the loops are `loop`, `try` is its own frame.
 //! - `// comment` lines before a message become a note over it.
+//! - `ref(Name, A, B)` is a `ref` frame labelled `Name` across `A`..`B`
+//!   (every participant when none is named); `==text==` is a divider.
 
 use crate::sequence::{
-    Event, Frame, Head, Message, Note, NoteSide, Participant, ParticipantBox, ParticipantKind,
+    Event, Frame, Head, Message, Note, NoteSide, Participant, ParticipantBox, ParticipantKind, Ref,
     Sequence,
 };
 use crate::{Error, strip_comment};
@@ -296,7 +298,7 @@ impl<'a> Parser<'a> {
             return self.declare(None, top);
         }
         if self.rest().starts_with("==") {
-            return Err(self.err("dividers (`==…==`) are not supported in zenuml (see DESIGN.md)"));
+            return self.divider();
         }
         match self.word() {
             "title" if top => {
@@ -323,9 +325,8 @@ impl<'a> Parser<'a> {
             }
             "try" => self.try_catch(),
             "return" => self.ret(),
-            word @ ("ref" | "section") => Err(self.err(format!(
-                "`{word}` is not supported in zenuml (see DESIGN.md)"
-            ))),
+            "ref" => self.reference(),
+            "section" => Err(self.err("`section` is not supported in zenuml (see DESIGN.md)")),
             word @ ("else" | "catch" | "finally") => {
                 let opener = if word == "else" { "if" } else { "try" };
                 Err(self.err(format!("`{word}` without a preceding `{opener} {{ … }}`")))
@@ -563,6 +564,61 @@ impl<'a> Parser<'a> {
             self.body()?;
         }
         self.seq.events.push(Event::End);
+        Ok(())
+    }
+
+    /// `==text==`: a divider across every lifeline. As in ZenUML, the
+    /// label is the line with its `=` fences trimmed.
+    fn divider(&mut self) -> Result<(), Error> {
+        let line = self.rest_of_line();
+        let label = line.trim_matches('=').trim().to_string();
+        self.seq.events.push(Event::Divider(label));
+        Ok(())
+    }
+
+    /// `ref(Name, A, B)`: an interaction use labelled `Name`, across the
+    /// participants named after it. A quoted argument is the label
+    /// wherever it stands, so `ref(A, B, "Name")` reads the same.
+    fn reference(&mut self) -> Result<(), Error> {
+        let line = self.line();
+        self.pos += "ref".len();
+        self.skip_spaces();
+        if self.peek() != Some('(') {
+            return Err(self.err("expected `ref(Name)` or `ref(Name, A, B)`"));
+        }
+        let inner = self.parens()?;
+        let mut args: Vec<(String, bool)> = Vec::new();
+        let mut current = String::new();
+        let mut quoted = false;
+        let mut was_quoted = false;
+        for c in inner.chars().chain([',']) {
+            match c {
+                '"' => {
+                    quoted = !quoted;
+                    was_quoted = true;
+                }
+                ',' if !quoted => {
+                    let arg = current.trim().to_string();
+                    if arg.is_empty() {
+                        return Err(Error::new(
+                            line,
+                            "`ref(…)` has an empty argument; expected `ref(Name, A, B)`",
+                        ));
+                    }
+                    args.push((arg, was_quoted));
+                    current.clear();
+                    was_quoted = false;
+                }
+                c => current.push(c),
+            }
+        }
+        let at = args.iter().position(|(_, q)| *q).unwrap_or(0);
+        let (label, _) = args.remove(at);
+        let participants = args.iter().map(|(name, _)| self.ensure(name)).collect();
+        self.seq.events.push(Event::Ref(Ref {
+            label,
+            participants,
+        }));
         Ok(())
     }
 
@@ -901,7 +957,12 @@ impl<'a> Parser<'a> {
                         n.last = map(n.last);
                     }
                     Event::Activate(w) | Event::Deactivate(w) => *w = map(*w),
-                    Event::Start(..) | Event::Section(_) | Event::End => {}
+                    Event::Ref(r) => {
+                        for p in &mut r.participants {
+                            *p = map(*p);
+                        }
+                    }
+                    Event::Start(..) | Event::Section(_) | Event::End | Event::Divider(_) => {}
                 }
             }
         }
@@ -1196,9 +1257,9 @@ mod tests {
     #[test]
     fn unsupported_constructs_are_errors_with_lines() {
         for (source, line, needle) in [
-            ("zenuml\n A->B: x\n ref(Other)\n", 3, "`ref`"),
+            ("zenuml\n A->B: x\n ref(Other,)\n", 3, "empty argument"),
+            ("zenuml\n ref Other\n", 2, "expected `ref(Name)`"),
             ("zenuml\n section(S) {\n }\n", 2, "`section`"),
-            ("zenuml\n ==Phase 2==\n", 2, "dividers"),
             ("zenuml\n A #FF0000\n", 2, "colours"),
             ("zenuml\n A.m() {\n", 2, "never closed"),
             ("zenuml\n }\n", 2, "without an open"),
@@ -1212,6 +1273,127 @@ mod tests {
             let error = parse(source).unwrap_err();
             assert_eq!(error.line, line, "{source}: {error}");
             assert!(error.message.contains(needle), "{source}: {error}");
+        }
+    }
+
+    #[test]
+    fn refs_and_dividers_parse_into_the_model() {
+        let seq = parse(
+            "zenuml\n A->B: hi\n ref(Checkout)\n ref(Pay, B, C)\n ref(A, C, \"Audit trail\")\n == Later ==\n ====\n B->A: bye\n",
+        )
+        .unwrap();
+        let id = |i: usize| seq.participants[i].id.as_str();
+        let items: Vec<String> = seq
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Ref(r) => Some(format!(
+                    "ref {}: {}",
+                    r.label,
+                    r.participants
+                        .iter()
+                        .map(|&p| id(p))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )),
+                Event::Divider(label) => Some(format!("== {label}")),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            items,
+            [
+                "ref Checkout: ",
+                "ref Pay: B,C",
+                "ref Audit trail: A,C",
+                "== Later",
+                "== ",
+            ]
+        );
+        // `C` is a participant once a ref names it.
+        assert_eq!(seq.participants.len(), 3);
+    }
+
+    #[test]
+    fn a_ref_inside_a_call_maps_past_the_starter() {
+        let seq = parse("zenuml\n A.m() {\n   ref(Sub, A)\n }\n").unwrap();
+        let r = seq
+            .events
+            .iter()
+            .find_map(|e| match e {
+                Event::Ref(r) => Some(r),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(seq.participants[r.participants[0]].id, "A");
+    }
+
+    #[test]
+    fn refs_and_dividers_are_drawn() {
+        use diagram_scene::ContainerKind;
+        struct Fixed;
+        impl crate::text::Measure for Fixed {
+            fn width(&self, text: &str, size: f32, _bold: bool) -> f32 {
+                text.chars().count() as f32 * size * 0.5
+            }
+        }
+        let source = "zenuml\n A->B: hi\n B->C: on\n C->D: on\n ref(Pay, B, C)\n ==Later==\n ref(Everything)\n D->A: bye\n";
+        let scene = super::super::scene(source, &Fixed).unwrap();
+        let texts = scene.texts();
+        for want in ["Pay", "Later", "Everything", "hi", "bye"] {
+            assert!(texts.iter().any(|t| t == want), "{want} missing: {texts:?}");
+        }
+        let refs: Vec<_> = scene
+            .containers
+            .iter()
+            .filter(|c| matches!(&c.kind, ContainerKind::Fragment { operator, .. } if operator == "ref"))
+            .map(|c| c.rect)
+            .collect();
+        assert_eq!(refs.len(), 2);
+        let head = |id: &str| scene.node(id).unwrap().rect;
+        // Exactly the named participants' heads wide.
+        assert!((refs[0].x - head("B").x).abs() < 0.01, "{:?}", refs[0]);
+        assert!((refs[0].right() - head("C").right()).abs() < 0.01);
+        // None named: every participant.
+        assert!((refs[1].x - head("A").x).abs() < 0.01);
+        assert!((refs[1].right() - head("D").right()).abs() < 0.01);
+        // Each label is centred in its frame, and the frames keep to
+        // their own rows, either side of the divider.
+        for (rect, label) in refs.iter().zip(["Pay", "Everything"]) {
+            let t = scene
+                .texts
+                .iter()
+                .find(|t| t.line.plain() == label)
+                .unwrap();
+            assert!((t.pos.x - rect.center().x).abs() < 0.01);
+            assert!(t.pos.y > rect.y && t.pos.y < rect.bottom());
+        }
+        let pill = scene
+            .nodes
+            .iter()
+            .find(|n| n.id.starts_with("divider#"))
+            .unwrap();
+        assert_eq!(pill.label[0].plain(), "Later");
+        assert!(pill.rect.y > refs[0].bottom() && pill.rect.bottom() < refs[1].y);
+        // A double rule from the first head to the last.
+        let rule: Vec<_> = scene
+            .edges
+            .iter()
+            .filter(|e| e.from.is_none() && e.path.len() == 2)
+            .collect();
+        assert_eq!(rule.len(), 2, "a double rule");
+        for e in rule {
+            let (diagram_scene::Seg::Move(a), diagram_scene::Seg::Line(b)) = (e.path[0], e.path[1])
+            else {
+                panic!("a straight rule")
+            };
+            assert!((a.x - head("A").x).abs() < 0.01 && (b.x - head("D").right()).abs() < 0.01);
+        }
+        let bounds = scene.bounds();
+        let mut all: Vec<_> = scene.nodes.iter().map(|n| n.rect).collect();
+        all.extend(scene.containers.iter().map(|c| c.rect));
+        for r in all {
+            assert!(bounds.encloses(&r, 0.01), "{r:?} escapes {bounds:?}");
         }
     }
 

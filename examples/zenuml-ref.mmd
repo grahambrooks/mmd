@@ -1,0 +1,12 @@
+%% showcase: zenuml ref fragments
+%% prose: `ref(Name)` draws a reference to another interaction — UML's interaction use — as a `ref` frame of its own row with the name centred. `ref(Name, A, B)` spans the named participants' heads, leftmost to rightmost; with none named it spans every participant. A quoted argument is the name wherever it stands, so `ref(A, B, "Name")` reads the same.
+%% approx: The frame is as wide as the named participants' heads; ZenUML sizes it to its own fragment layout.
+zenuml
+    @Actor Shopper
+    Shopper->Shop.checkout(cart) {
+      ref(Authenticate, Shopper, Shop)
+      Shop->Payments.charge(total) {
+        ref("Fraud screening", Payments)
+      }
+      ref(Fulfilment)
+    }
