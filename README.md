@@ -4,9 +4,10 @@ Render [Mermaid](https://mermaid.js.org) diagrams to SVG, for web and PDF
 publication. Pure Rust: no Node, no browser, no JavaScript runtime, no C
 toolchain.
 
-> **Status:** early development. Flowcharts, gitGraph and C4 context diagrams render; see
-> [DESIGN.md](DESIGN.md) for the exact supported syntax and for what is
-> deliberately out of scope.
+> **Status:** early development, released as CalVer builds. Flowcharts,
+> gitGraph and C4 context diagrams render; see [DESIGN.md](DESIGN.md) for the
+> exact supported syntax, what is deliberately out of scope, and the
+> [roadmap](DESIGN.md#roadmap) for the other diagram types.
 
 ## Why
 
@@ -58,6 +59,12 @@ mmd = { version = "*", default-features = false }
 | `gitGraph` | `commit` (`id:`, `tag:`, `type:`), `branch`, `checkout`/`switch`, `merge` |
 | `C4Context` | `title`, `Person`, `Person_Ext`, `System`, `System_Ext`, `SystemDb`, `Rel` |
 
+Next, in [roadmap](DESIGN.md#roadmap) order: the remaining C4 levels
+(`C4Container`, `C4Component`, boundaries) and gitGraph gaps; then `state`,
+`erDiagram` and `classDiagram` on the existing layered layout; then
+`sequenceDiagram`, `gantt`, `pie` and the other self-laid-out types. Every
+other diagram type is rejected today.
+
 Anything outside that subset is a **parse error naming the construct and its
 line** — never a silently missing element:
 
@@ -66,8 +73,8 @@ $ mmd notes.mmd
 mmd: notes.mmd: line 7: `cherry-pick` is not supported (see DESIGN.md)
 ```
 
-Adding a diagram type is a self-contained module: parse, layout, render, and
-one line in `detect()`. See [DESIGN.md](DESIGN.md#adding-a-diagram-type).
+Adding a diagram type is a self-contained module: parse and layout to a
+`Scene`, plus registration in `detect()` and `scene()`. See [DESIGN.md](DESIGN.md#adding-a-diagram-type).
 
 ## See it
 

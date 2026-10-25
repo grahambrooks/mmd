@@ -1,6 +1,6 @@
 ---
 name: render-mermaid
-description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the gitGraph / C4 diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Only `gitGraph` and `C4Context` diagrams are supported; flowchart, sequence, class, state, ER and the rest are rejected.
+description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the flowchart / gitGraph / C4 diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Only `flowchart`/`graph`, `gitGraph` and `C4Context` are supported; sequence, class, state, ER, gantt, pie and the rest are rejected.
 argument-hint: <diagram.mmd> [-o out.svg]
 ---
 
@@ -35,7 +35,29 @@ There are no theme, size, or format options. Output is always SVG.
 
 ## What it can render
 
-Only two diagram types. The first non-blank, non-`%%` line must be the keyword.
+Three diagram types. The first non-blank, non-`%%` line must be the keyword.
+
+**`flowchart`** (or `graph`), direction `TB`/`TD`/`BT`/`LR`/`RL` (default `TB`)
+
+```
+flowchart LR
+    A[Start] --> B{Decide}
+    B -->|yes| C([Done])
+    B -- no --> D[[Retry]]
+    subgraph tools [Tools]
+        C & D --> E[(Store)]
+    end
+    classDef hot fill:#f96,stroke:#333,color:#222
+    class B hot
+```
+
+Shapes: `[rect]`, `(round)`, `([stadium])`, `[[subroutine]]`, `[(cylinder)]`,
+`((circle))`, `(((double circle)))`, `>flag]`, `{rhombus}`, `{{hexagon}}`,
+`[/parallelogram/]`, `[\alt\]`, `[/trapezoid\]`, `[\alt/]`. Labels may be
+quoted and use `<br>`. Links: `-->`, `---`, `-.->`, `-.-`, `==>`, `===`,
+`--o`, `--x`, `<-->`, `o--o`, `x--x`, with `|label|` or `-- label -->`. Chains
+(`A --> B --> C`), `&` lists, `;` between statements, nested `subgraph id [title]`
+… `end`. Styling: `classDef`, `class`, `A:::cls`, `style A fill:…,stroke:…,color:…`.
 
 **`gitGraph`**
 
@@ -74,16 +96,22 @@ every alias used in a `Rel` must be declared somewhere in the diagram.
 
 ## What it cannot render — do not generate these
 
-- Any other diagram type: `flowchart`/`graph`, `sequenceDiagram`,
-  `classDiagram`, `stateDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`,
-  `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`.
+- Any other diagram type: `sequenceDiagram`, `classDiagram`,
+  `stateDiagram`/`stateDiagram-v2`, `erDiagram`, `gantt`, `pie`, `mindmap`,
+  `timeline`, `journey`, `C4Container`, `C4Component`, `C4Dynamic`,
+  `C4Deployment`, and the rest. (Planned order: DESIGN.md → Roadmap.)
+- flowchart: the v11 `A@{ shape: … }` syntax, edge ids (`A e1@--> B`),
+  invisible links `~~~`, `flowchart-elk`. Use the bracket shapes instead.
 - gitGraph: `cherry-pick`, `commit msg:`, `branch ... order:`, `title`.
 - C4: any `*_Boundary`, `Container*`/`Component*`/`Node*`, `SystemDb_Ext`,
   `SystemQueue`, `BiRel`, `Rel_U/D/L/R`, `Rel_Back`, `UpdateElementStyle`,
   `UpdateLayoutConfig`.
 - YAML front matter (`---\ntitle: ...\n---`) is rejected.
-- Accepted but **ignored**: `%%{init: ...}%%` directives (treated as comments)
-  and a gitGraph direction (`gitGraph TB:` still draws left to right).
+- Accepted but **ignored**: `%%{init: ...}%%` directives (treated as comments);
+  a gitGraph direction (`gitGraph TB:` still draws left to right); in
+  flowcharts `click`, `linkStyle`, `accTitle`/`accDescr`, a subgraph's own
+  `direction`, and `style` on a subgraph. Markdown in labels is shown
+  literally — don't use `**bold**` in labels.
 
 If the user needs an unsupported type, say so — do not silently rewrite the
 diagram into a different type.
@@ -93,9 +121,11 @@ diagram into a different type.
 Unsupported input is a hard error, exit status 1, naming the line and construct:
 
 ```
-mmd: x.mmd: line 1: unrecognised diagram: expected one of `gitGraph`, `C4Context`
+mmd: x.mmd: line 1: unrecognised diagram: expected one of `flowchart`, `gitGraph`, `C4Context`
 mmd: x.mmd: line 6: `cherry-pick` is not supported (see DESIGN.md)
 mmd: x.mmd: line 3: unknown branch `nope`
+mmd: x.mmd: line 2: expected a link near `~~~ C`
+mmd: x.mmd: line 1: unknown direction `XY`
 ```
 
 No file is written on error — but a stale SVG from an earlier run stays in
