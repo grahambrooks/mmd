@@ -1,0 +1,14 @@
+%% showcase: xychart with front matter
+%% prose: Mermaid's docs turn on bar value labels through YAML front matter. mmd reads the front matter's title and ignores its config, as it ignores %%{init}%% directives, so the chart renders without the data labels it asks for.
+%% approx: Front matter `config` (here showDataLabel) is ignored: no value labels on the bars.
+---
+title: Front matter title
+config:
+  xyChart:
+    showDataLabel: true
+---
+xychart-beta
+    title "Sales Revenue"
+    x-axis [jan, feb, mar, apr, may]
+    y-axis "Revenue (in $)" 4000 --> 11000
+    bar [5000, 6000, 7500, 8200, 9500]

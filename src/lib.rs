@@ -18,6 +18,7 @@ mod chart;
 pub mod class;
 pub mod er;
 pub mod flowchart;
+mod frontmatter;
 pub mod gantt;
 pub mod gitgraph;
 mod graph;
@@ -207,6 +208,9 @@ impl std::error::Error for Error {}
 
 /// Identify the diagram type from its first meaningful line.
 pub fn detect(source: &str) -> Option<Kind> {
+    if let Ok(Some(front)) = frontmatter::split(source) {
+        return detect(&front.body);
+    }
     let line = source
         .lines()
         .map(|line| strip_comment(line).trim())
@@ -250,6 +254,20 @@ pub fn render_with(source: &str, theme: &Theme, measure: &dyn Measure) -> Result
 /// Colours in it are theme roles; `measure` should measure the font the
 /// host will draw text in.
 pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
+    match frontmatter::split(source)? {
+        Some(front) => {
+            let mut scene = diagram(&front.body, measure)?;
+            if let Some(title) = &front.title {
+                frontmatter::add_title(&mut scene, title, measure);
+            }
+            Ok(scene)
+        }
+        None => diagram(source, measure),
+    }
+}
+
+/// Lay out a source with no front matter.
+fn diagram(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
     match detect(source) {
         Some(Kind::GitGraph) => gitgraph::scene(source, measure),
         Some(
@@ -282,13 +300,6 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Ishikawa) => ishikawa::scene(source, measure),
         None => {
             let line = first_content_line(source);
-            if source.lines().nth(line - 1).map(str::trim) == Some("---") {
-                return Err(Error::new(
-                    line,
-                    "YAML front matter (`---`) is not supported; use `title` where the \
-                     diagram takes one (see DESIGN.md)",
-                ));
-            }
             let expected: Vec<String> = Kind::ALL
                 .iter()
                 .filter(|kind| kind.is_supported())
@@ -368,11 +379,24 @@ mod tests {
     }
 
     #[test]
-    fn front_matter_is_named_in_its_error() {
+    fn front_matter_titles_the_diagram_and_keeps_line_numbers() {
+        let scene = scene(
+            "\n---\ntitle: Flow\nconfig:\n  look: handDrawn\n---\ngraph\n  A --> B\n",
+            &Fixed,
+        )
+        .unwrap();
+        assert!(scene.texts().iter().any(|t| t == "Flow"));
+        assert_eq!(detect("---\ntitle: x\n---\npie\n"), Some(Kind::Pie));
+        let error = render_with(
+            "---\ntitle: x\n---\ngraph\n  A -->\n",
+            &Theme::default(),
+            &Fixed,
+        )
+        .unwrap_err();
+        assert_eq!(error.line, 5);
         let error =
-            render_with("\n---\ntitle: x\n---\ngraph\n", &Theme::default(), &Fixed).unwrap_err();
-        assert_eq!(error.line, 2);
-        assert!(error.message.contains("front matter"), "{error}");
+            render_with("---\nlayout: elk\n---\ngraph\n", &Theme::default(), &Fixed).unwrap_err();
+        assert!(error.message.contains("layout"), "{error}");
     }
 
     #[test]
