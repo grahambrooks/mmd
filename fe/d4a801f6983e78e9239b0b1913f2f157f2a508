@@ -1,0 +1,63 @@
+src/venn/parse.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-478
+src/eventmodeling/mod.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-18
+examples/venn.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-22
+examples/wardley.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-37
+src/architecture/layout.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-648
+src/info/layout.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-67
+src/info/mod.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-17
+src/wardley/parse.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-699
+src/lib.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 15,21,27,47-48,92-96,130-134,167-171,190,322-326
+src/info/parse.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-93
+examples/gaps/zenuml.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-13
+examples/architecture.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-23
+src/architecture/mod.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-18
+examples/eventmodeling.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-27
+examples/info.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-5
+src/eventmodeling/layout.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-337
+src/venn/layout.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-326
+src/wardley/layout.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-549
+src/wardley/mod.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-17
+examples/gaps/venn-four-sets.mmd
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-9
+src/architecture/parse.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-518
+src/venn/mod.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-17
+src/eventmodeling/parse.rs
+  s_0c7b5d39344b95::t_79074a73fe7f24 1-610
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fed4a801f6983e78e9239b0b1913f2f157f2a508",
+  "prompts": {},
+  "sessions": {
+    "s_0c7b5d39344b95": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ddb829-8b8a-4e74-b861-93398a7d9c8c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
