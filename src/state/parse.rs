@@ -310,136 +310,139 @@ pub fn parse(source: &str) -> Result<StateDiagram, Error> {
             header = true;
             continue;
         }
-        if line == "}" {
-            if p.scopes.pop().is_none() {
-                return Err(Error::new(number, "`}` closes no composite state"));
+        // A composite's body may share its line: `state A { B --> C }`.
+        for line in statements(line) {
+            if line == "}" {
+                if p.scopes.pop().is_none() {
+                    return Err(Error::new(number, "`}` closes no composite state"));
+                }
+                continue;
             }
-            continue;
-        }
-        if line == "--" {
-            p.divide(number)?;
-            continue;
-        }
-        let keyword = line.split_whitespace().next().unwrap_or("");
-        let rest = line[keyword.len()..].trim();
-        match keyword {
-            "direction" => {
-                let direction = Direction::from_word(rest).ok_or_else(|| {
-                    Error::new(
-                        number,
-                        format!("unknown direction `{rest}`: expected TB, BT, LR or RL"),
-                    )
-                })?;
-                match p.scope() {
-                    Some(g) => {
-                        // A region follows its composite.
-                        let g = match p.d.groups[g].state {
-                            Some(_) => g,
-                            None => p.d.groups[g].parent.unwrap_or(g),
-                        };
-                        p.d.groups[g].direction = Some(direction);
-                        for group in &mut p.d.groups {
-                            if group.state.is_none() && group.parent == Some(g) {
-                                group.direction = Some(direction);
+            if line == "--" {
+                p.divide(number)?;
+                continue;
+            }
+            let keyword = line.split_whitespace().next().unwrap_or("");
+            let rest = line[keyword.len()..].trim();
+            match keyword {
+                "direction" => {
+                    let direction = Direction::from_word(rest).ok_or_else(|| {
+                        Error::new(
+                            number,
+                            format!("unknown direction `{rest}`: expected TB, BT, LR or RL"),
+                        )
+                    })?;
+                    match p.scope() {
+                        Some(g) => {
+                            // A region follows its composite.
+                            let g = match p.d.groups[g].state {
+                                Some(_) => g,
+                                None => p.d.groups[g].parent.unwrap_or(g),
+                            };
+                            p.d.groups[g].direction = Some(direction);
+                            for group in &mut p.d.groups {
+                                if group.state.is_none() && group.parent == Some(g) {
+                                    group.direction = Some(direction);
+                                }
                             }
                         }
+                        None => p.d.direction = direction,
                     }
-                    None => p.d.direction = direction,
+                    continue;
+                }
+                "classDef" => {
+                    let mut words = rest.splitn(2, char::is_whitespace);
+                    let names = words.next().unwrap_or("");
+                    let colors = css(words.next().unwrap_or(""), number)?;
+                    for name in names.split(',') {
+                        p.d.classes.push((name.trim().to_string(), colors));
+                    }
+                    continue;
+                }
+                "class" => {
+                    let mut words = rest.rsplitn(2, char::is_whitespace);
+                    let class = words.next().unwrap_or("").to_string();
+                    let ids = words.next().unwrap_or("").trim();
+                    if ids.is_empty() {
+                        return Err(Error::new(number, "`class` needs states and a class name"));
+                    }
+                    for id in ids.split(',') {
+                        let id = id.trim();
+                        check_id(id, number)?;
+                        let s = p.state(id);
+                        p.d.states[s].classes.push(class.clone());
+                    }
+                    continue;
+                }
+                "style" => {
+                    let mut words = rest.splitn(2, char::is_whitespace);
+                    let ids = words.next().unwrap_or("");
+                    let colors = css(words.next().unwrap_or(""), number)?;
+                    for id in ids.split(',') {
+                        let id = id.trim();
+                        check_id(id, number)?;
+                        let s = p.state(id);
+                        p.d.states[s].style.merge(&colors);
+                    }
+                    continue;
+                }
+                // Interaction and sizing: accepted, not drawn.
+                "click" | "scale" => continue,
+                "hide" if rest == "empty description" => continue,
+                "note" => {
+                    if let Some(open) = note_statement(&mut p, rest, number)? {
+                        note = Some((open.0, open.1, Vec::new(), number));
+                    }
+                    continue;
+                }
+                "state" => {
+                    state_statement(&mut p, rest, number)?;
+                    continue;
+                }
+                _ => {}
+            }
+            if let Some(value) = acc(line, "accTitle") {
+                p.d.acc_title = Some(value.to_string());
+                continue;
+            }
+            if let Some(value) = acc(line, "accDescr") {
+                p.d.acc_descr = Some(value.to_string());
+                continue;
+            }
+            if let Some(open) = line.strip_prefix("accDescr")
+                && let Some(body) = open.trim_start().strip_prefix('{')
+            {
+                match body.find('}') {
+                    Some(end) => p.d.acc_descr = Some(body[..end].trim().to_string()),
+                    None => descr = Some((format!("{body}\n"), number)),
                 }
                 continue;
             }
-            "classDef" => {
-                let mut words = rest.splitn(2, char::is_whitespace);
-                let names = words.next().unwrap_or("");
-                let colors = css(words.next().unwrap_or(""), number)?;
-                for name in names.split(',') {
-                    p.d.classes.push((name.trim().to_string(), colors));
-                }
+            if let Some(at) = line.find("-->") {
+                let left = &line[..at];
+                let right = &line[at + 3..];
+                let (right, label) = split_description(right);
+                let from = p.end(left, Kind::Start, number)?;
+                let to = p.end(right, Kind::End, number)?;
+                p.d.transitions.push(Transition {
+                    from,
+                    to,
+                    label: label.filter(|l| !l.is_empty()),
+                });
                 continue;
             }
-            "class" => {
-                let mut words = rest.rsplitn(2, char::is_whitespace);
-                let class = words.next().unwrap_or("").to_string();
-                let ids = words.next().unwrap_or("").trim();
-                if ids.is_empty() {
-                    return Err(Error::new(number, "`class` needs states and a class name"));
-                }
-                for id in ids.split(',') {
-                    let id = id.trim();
-                    check_id(id, number)?;
-                    let s = p.state(id);
-                    p.d.states[s].classes.push(class.clone());
-                }
-                continue;
+            // `id`, `id:::class` or `id : description`.
+            let (id, description) = split_description(line);
+            if id.trim() == "[*]" {
+                return Err(Error::new(
+                    number,
+                    "`[*]` on its own is not a statement: it starts or ends a transition",
+                ));
             }
-            "style" => {
-                let mut words = rest.splitn(2, char::is_whitespace);
-                let ids = words.next().unwrap_or("");
-                let colors = css(words.next().unwrap_or(""), number)?;
-                for id in ids.split(',') {
-                    let id = id.trim();
-                    check_id(id, number)?;
-                    let s = p.state(id);
-                    p.d.states[s].style.merge(&colors);
-                }
-                continue;
+            let s = p.end(id, Kind::Normal, number)?;
+            if let Some(text) = description {
+                p.d.states[s].descriptions.push(text);
             }
-            // Interaction and sizing: accepted, not drawn.
-            "click" | "scale" => continue,
-            "hide" if rest == "empty description" => continue,
-            "note" => {
-                if let Some(open) = note_statement(&mut p, rest, number)? {
-                    note = Some((open.0, open.1, Vec::new(), number));
-                }
-                continue;
-            }
-            "state" => {
-                state_statement(&mut p, rest, number)?;
-                continue;
-            }
-            _ => {}
-        }
-        if let Some(value) = acc(line, "accTitle") {
-            p.d.acc_title = Some(value.to_string());
-            continue;
-        }
-        if let Some(value) = acc(line, "accDescr") {
-            p.d.acc_descr = Some(value.to_string());
-            continue;
-        }
-        if let Some(open) = line.strip_prefix("accDescr")
-            && let Some(body) = open.trim_start().strip_prefix('{')
-        {
-            match body.find('}') {
-                Some(end) => p.d.acc_descr = Some(body[..end].trim().to_string()),
-                None => descr = Some((format!("{body}\n"), number)),
-            }
-            continue;
-        }
-        if let Some(at) = line.find("-->") {
-            let left = &line[..at];
-            let right = &line[at + 3..];
-            let (right, label) = split_description(right);
-            let from = p.end(left, Kind::Start, number)?;
-            let to = p.end(right, Kind::End, number)?;
-            p.d.transitions.push(Transition {
-                from,
-                to,
-                label: label.filter(|l| !l.is_empty()),
-            });
-            continue;
-        }
-        // `id`, `id:::class` or `id : description`.
-        let (id, description) = split_description(line);
-        if id.trim() == "[*]" {
-            return Err(Error::new(
-                number,
-                "`[*]` on its own is not a statement: it starts or ends a transition",
-            ));
-        }
-        let s = p.end(id, Kind::Normal, number)?;
-        if let Some(text) = description {
-            p.d.states[s].descriptions.push(text);
         }
     }
     if !header {
@@ -455,6 +458,63 @@ pub fn parse(source: &str) -> Result<StateDiagram, Error> {
         return Err(Error::new(line, "composite state is never closed with `}`"));
     }
     Ok(p.d)
+}
+
+/// One line's statements. Mermaid's lexer opens a composite at `{` and
+/// closes it at `}` wherever they fall, so `state A { B --> C }` is three
+/// statements: `state A {`, `B --> C` and `}`. Braces inside quotes do
+/// not count, nor do any after a `:` (a description runs to the end of
+/// the line, as mermaid's `DESCR` token does) or after a keyword whose
+/// text runs to the end of the line (`note`, `classDef`, `accDescr` …).
+/// Mermaid has no statement separator: `;` is part of a name there.
+fn statements(line: &str) -> Vec<&str> {
+    const TO_END: [&str; 7] = [
+        "note",
+        "classDef",
+        "class",
+        "style",
+        "accTitle",
+        "accDescr",
+        "direction",
+    ];
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut quoted = false;
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if !quoted && line[start..i].trim().is_empty() {
+            // A new statement: does it run to the end of the line?
+            let piece = line[i..].trim_start();
+            let keyword = piece.split(|c: char| c.is_whitespace() || c == ':').next();
+            if keyword.is_some_and(|k| TO_END.contains(&k)) {
+                break;
+            }
+        }
+        let is_state = line[start..].trim_start().starts_with("state ");
+        match bytes[i] {
+            b'"' => quoted = !quoted,
+            _ if quoted => {}
+            b'{' => {
+                out.push(&line[start..=i]);
+                start = i + 1;
+            }
+            b'}' => {
+                out.push(&line[start..i]);
+                out.push("}");
+                start = i + 1;
+            }
+            b':' if line[i..].starts_with(":::") => i += 2,
+            b':' if !is_state => break,
+            _ => {}
+        }
+        i += 1;
+    }
+    out.push(&line[start..]);
+    out.into_iter()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 /// `left : description` → (`left`, description). A `:::` is a class, not
@@ -528,13 +588,6 @@ fn state_statement(p: &mut Parser, rest: &str, number: usize) -> Result<(), Erro
     } else {
         (rest, false, false)
     };
-    if head.contains(['{', '}']) {
-        return Err(Error::new(
-            number,
-            "a composite state's body on the same line as its `{` is not supported: start \
-             it on the next line (see DESIGN.md)",
-        ));
-    }
     let (id, description) = if let Some(quoted) = head.strip_prefix('"') {
         let close = quoted
             .find('"')
@@ -742,6 +795,57 @@ mod tests {
     }
 
     #[test]
+    fn a_composite_body_may_share_its_line() {
+        let d = parse(concat!(
+            "stateDiagram-v2\n",
+            "  [*] --> Door\n",
+            "  state Door { Open --> Closed }\n",
+            "  state Outer { state Inner { [*] --> Deep } }\n",
+            "  state \"A {quoted} name\" as Q { X --> Y : on {click} }\n",
+            "  }\n",
+            "  Door --> [*]\n",
+        ))
+        .unwrap();
+        let door = state(&d, "Door").composite.unwrap();
+        assert_eq!(state(&d, "Open").group, Some(door));
+        assert_eq!(state(&d, "Closed").group, Some(door));
+        assert_eq!(state(&d, "Door").group, None);
+        let outer = state(&d, "Outer").composite.unwrap();
+        let inner = state(&d, "Inner").composite.unwrap();
+        assert_eq!(state(&d, "Inner").group, Some(outer));
+        assert_eq!(state(&d, "Deep").group, Some(inner));
+        assert_eq!(state(&d, "Q").descriptions, ["A {quoted} name"]);
+        // A description runs to the end of the line, braces and all, so
+        // this `}` is text and Q is still open — as in mermaid.
+        let t = d
+            .transitions
+            .iter()
+            .find(|t| d.states[t.from].id == "X")
+            .unwrap();
+        assert_eq!(t.label.as_deref(), Some("on {click} }"));
+        assert_eq!(state(&d, "Y").group, state(&d, "Q").composite);
+    }
+
+    #[test]
+    fn statements_split_at_braces_only() {
+        assert_eq!(
+            statements("state Door { Open --> Closed }"),
+            ["state Door {", "Open --> Closed", "}"]
+        );
+        assert_eq!(statements("state A {}"), ["state A {", "}"]);
+        assert_eq!(statements("} }"), ["}", "}"]);
+        assert_eq!(
+            statements("state A { note right of B : {x} }"),
+            ["state A {", "note right of B : {x} }"]
+        );
+        assert_eq!(
+            statements("classDef a fill:#f00;"),
+            ["classDef a fill:#f00;"]
+        );
+        assert_eq!(statements("A:::hot --> B"), ["A:::hot --> B"]);
+    }
+
+    #[test]
     fn malformed_input_is_an_error_with_a_line() {
         for (source, line, needle) in [
             ("stateDiagram-v2\n  A --> B\n  --\n", 3, "only valid inside"),
@@ -758,6 +862,18 @@ mod tests {
             ("stateDiagram-v2\n  direction XY\n", 2, "unknown direction"),
             ("stateDiagram-v2\n  style A fill:blurple\n", 2, "colour"),
             ("flowchart\n", 1, "stateDiagram"),
+            // One-line bodies keep their line number.
+            (
+                "stateDiagram-v2\n  A --> B\n  state C { D --> E F }\n",
+                3,
+                "not a state id",
+            ),
+            ("stateDiagram-v2\n  state C { D }\n  }\n", 3, "closes no"),
+            (
+                "stateDiagram-v2\n  state C { D : open {\n",
+                2,
+                "never closed",
+            ),
         ] {
             let error = parse(source).unwrap_err();
             assert_eq!(error.line, line, "{source}: {error}");

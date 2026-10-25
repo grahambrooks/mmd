@@ -16,7 +16,9 @@ use diagram_scene::{
     Role, Scene, Seg, Shape, Style, Text, TextLine, Weight,
 };
 
-use super::parse::{Event, Frame, Head, Message, Note, NoteSide, ParticipantKind, Sequence};
+use super::parse::{
+    Event, Frame, Head, Message, Note, NoteSide, Number, ParticipantKind, Sequence,
+};
 use crate::text::{Measure, wrap};
 use crate::{FONT_SIZE, PADDING};
 
@@ -40,6 +42,9 @@ const LABEL_GAP: f32 = 5.0;
 /// Width that `wrap:` text is wrapped to.
 const WRAP_WIDTH: f32 = 200.0;
 const ICON: f32 = 30.0;
+
+/// The radius of an `autonumber` circle, as the scene draws one.
+const NUMBER_R: f32 = FONT_SIZE * 0.75;
 
 /// Lay a parsed sequence out.
 pub fn layout(seq: &Sequence, measure: &dyn Measure) -> Scene {
@@ -168,6 +173,13 @@ impl<'a> Layout<'a> {
             &line,
             FONT_SIZE,
         )) + 6.0
+    }
+
+    /// How wide an `autonumber` badge is: a circle, stretched to a pill
+    /// for a number too long for it.
+    fn number_width(&self, n: Number) -> f32 {
+        let text = self.measure.width(&n.to_string(), FONT_SIZE * 0.8, true);
+        (text + 8.0).max(NUMBER_R * 2.0)
     }
 
     fn label_widest(&self, lines: &[String]) -> f32 {
@@ -342,7 +354,7 @@ impl<'a> Layout<'a> {
                 }
                 Event::Message(m) => {
                     let (lo, hi) = (m.from.min(m.to), m.from.max(m.to));
-                    let number = if m.number.is_some() { 24.0 } else { 0.0 };
+                    let number = m.number.map_or(0.0, |n| self.number_width(n) + 3.0);
                     needs.push((lo, hi, w + 24.0 + number));
                 }
                 Event::Note(note) => {
@@ -510,8 +522,8 @@ impl<'a> Layout<'a> {
             // A start arrowhead would hide under the number's circle.
             // Likewise under a `()` dot, at either end.
             let dir = if rightward { 1.0 } else { -1.0 };
-            let inset = if m.number.is_some() && m.start != Head::None {
-                12.0
+            let inset = if let Some(n) = m.number.filter(|_| m.start != Head::None) {
+                self.number_width(n) / 2.0 + 1.5
             } else if m.dot_from {
                 5.0
             } else {
@@ -561,19 +573,40 @@ impl<'a> Layout<'a> {
             });
             top += self.line_height;
         }
-        let number_r = FONT_SIZE * 0.75;
+        let number_half = m.number.map_or(0.0, |n| self.number_width(n) / 2.0);
+        let mut badge = None;
         if let Some(n) = m.number {
-            edge.step = Some((n, Point::new(from_x, line_y)));
-            self.grow(Rect::centered(
-                Point::new(from_x, line_y),
-                number_r * 2.0,
-                number_r * 2.0,
-            ));
+            let at = Point::new(from_x, line_y);
+            let rect = Rect::centered(at, number_half * 2.0, NUMBER_R * 2.0);
+            match n.whole() {
+                // The scene draws a whole number as the edge's own step.
+                Some(whole) => edge.step = Some((whole, at)),
+                // A decimal (`1.1`) does not fit the scene's whole-number
+                // step, so it is a pill of its own, drawn over the line.
+                None => {
+                    let shape = if number_half * 2.0 > NUMBER_R * 2.0 {
+                        Shape::Stadium
+                    } else {
+                        Shape::Circle
+                    };
+                    let mut node = Node::new(format!("number#{index}"), shape, rect);
+                    node.label = vec![TextLine::new(n.to_string(), Font::Small)];
+                    node.style = Style {
+                        fill: Paint::Role(Role::Accent),
+                        stroke: Paint::Role(Role::Accent),
+                        text: Paint::Role(Role::Background),
+                        ..Style::for_shape(shape)
+                    };
+                    badge = Some(node);
+                }
+            }
+            self.grow(rect);
         }
         self.edges.push(edge);
+        self.nodes.extend(badge);
         let drop = if m.from == m.to { SELF_DROP } else { 0.0 };
         let top = line_y - LABEL_GAP - label_h;
-        let x0 = x0 - if m.number.is_some() { number_r } else { 0.0 };
+        let x0 = x0 - number_half;
         self.grow(Rect::new(x0, top, x1 - x0, line_y + drop - top + 1.0));
         self.touch(x0, x1);
 
@@ -1174,5 +1207,25 @@ mod tests {
             .unwrap();
         let width = Fixed.width(&label.line.plain(), FONT_SIZE, false);
         assert!(b.center().x - a.center().x > width);
+    }
+
+    #[test]
+    fn decimal_numbers_are_drawn_as_badges() {
+        let seq =
+            parse("sequenceDiagram\nautonumber 1.1 0.1\nA->>B: a\nB-->>A: b\nA->>B: c\n").unwrap();
+        let s = layout(&seq, &Fixed);
+        assert!(s.edges.iter().all(|e| e.step.is_none()));
+        let badges: Vec<String> = s
+            .nodes
+            .iter()
+            .filter(|n| n.id.starts_with("number#"))
+            .map(|n| n.label[0].plain())
+            .collect();
+        assert_eq!(badges, ["1.1", "1.2", "1.3"]);
+        // Each badge sits on its message's start, inside the bounds.
+        let bounds = s.bounds();
+        for n in s.nodes.iter().filter(|n| n.id.starts_with("number#")) {
+            assert!(n.rect.x >= bounds.x && n.rect.right() <= bounds.right());
+        }
     }
 }

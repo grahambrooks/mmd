@@ -1,0 +1,8 @@
+%% showcase: stateDiagram composite bodies on one line
+%% prose: Mermaid's lexer opens a composite at `{` and closes it at `}` wherever they fall, so a whole body, nested ones included, can share the line with its braces. Door holds Open and Closed; Lock nests Engaged inside Bolt on a single line.
+stateDiagram-v2
+    [*] --> Door
+    state Door { Open --> Closed }
+    Door --> Lock : shut
+    state Lock { state Bolt { [*] --> Engaged } }
+    Lock --> [*]

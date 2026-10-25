@@ -5,6 +5,10 @@
 //! column level; deeper nodes are cards in the column above them. A node is
 //! `id`, `id[label]` (any of mindmap's brackets) or `[label]`, optionally
 //! followed by `@{ key: value, … }` metadata, which may span lines.
+//!
+//! `::icon(name)` and `:::class …` are statements of their own, on the
+//! line after the node they decorate (as in mindmap). Kanban has no
+//! `classDef`, so a class is only a CSS hook; it is kept, not drawn.
 
 use crate::{Error, strip_comment};
 
@@ -23,6 +27,11 @@ pub struct Card {
     pub ticket: Option<String>,
     pub assigned: Option<String>,
     pub priority: Option<Priority>,
+    /// `icon:` metadata or `::icon(…)`: a Font Awesome (or other icon
+    /// pack) name.
+    pub icon: Option<String>,
+    /// `:::a b`: CSS class names, which nothing in the board styles.
+    pub classes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +39,9 @@ pub struct Column {
     pub id: String,
     pub label: String,
     pub cards: Vec<Card>,
+    /// Kept as given; mermaid draws neither on a column.
+    pub icon: Option<String>,
+    pub classes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -60,17 +72,30 @@ pub fn parse(source: &str) -> Result<Kanban, Error> {
             }
             return Err(Error::new(line_number, "expected `kanban`"));
         }
-        if line.starts_with("::icon(") {
-            return Err(Error::new(
-                line_number,
-                "`::icon()` is not supported (see DESIGN.md)",
-            ));
+        if let Some(body) = line.strip_prefix("::icon(") {
+            let Some((name, tail)) = body.split_once(')') else {
+                return Err(Error::new(
+                    line_number,
+                    "`::icon(` is never closed with `)`",
+                ));
+            };
+            if !tail.trim().is_empty() {
+                return Err(Error::new(
+                    line_number,
+                    format!("unexpected `{}` after `::icon(…)`", tail.trim()),
+                ));
+            }
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(Error::new(line_number, "`::icon()` names no icon"));
+            }
+            *decorated(&mut kanban, line_number, "::icon()")?.0 = Some(name.to_string());
+            continue;
         }
-        if line.starts_with(":::") {
-            return Err(Error::new(
-                line_number,
-                "`:::` classes are not supported (see DESIGN.md)",
-            ));
+        if let Some(names) = line.strip_prefix(":::") {
+            let classes = decorated(&mut kanban, line_number, ":::")?.1;
+            classes.extend(names.split_whitespace().map(str::to_string));
+            continue;
         }
         let level = raw.chars().take_while(|c| c.is_whitespace()).count();
 
@@ -81,6 +106,8 @@ pub fn parse(source: &str) -> Result<Kanban, Error> {
             ticket: None,
             assigned: None,
             priority: None,
+            icon: None,
+            classes: Vec::new(),
         };
         let mut rest = rest.trim_start();
         if let Some(body) = rest.strip_prefix("@{") {
@@ -106,10 +133,15 @@ pub fn parse(source: &str) -> Result<Kanban, Error> {
             rest = "";
         }
         let rest = rest.trim();
-        if rest.starts_with(":::") {
+        if rest.starts_with(":::") || rest.starts_with("::icon(") {
+            let what = if rest.starts_with(":::") {
+                ":::"
+            } else {
+                "::icon()"
+            };
             return Err(Error::new(
                 line_number,
-                "`:::` classes are not supported (see DESIGN.md)",
+                format!("`{what}` goes on its own line, under the node it decorates, not after it"),
             ));
         }
         if !rest.is_empty() {
@@ -134,6 +166,8 @@ pub fn parse(source: &str) -> Result<Kanban, Error> {
                 id: card.id,
                 label: card.label,
                 cards: Vec::new(),
+                icon: card.icon,
+                classes: Vec::new(),
             });
         } else {
             kanban
@@ -149,6 +183,25 @@ pub fn parse(source: &str) -> Result<Kanban, Error> {
         return Err(Error::new(1, "expected `kanban`"));
     }
     Ok(kanban)
+}
+
+/// The icon and classes of the node `::icon()` or `:::` decorates: the
+/// last one, card or column.
+fn decorated<'a>(
+    kanban: &'a mut Kanban,
+    line: usize,
+    what: &str,
+) -> Result<(&'a mut Option<String>, &'a mut Vec<String>), Error> {
+    let Some(column) = kanban.columns.last_mut() else {
+        return Err(Error::new(
+            line,
+            format!("`{what}` decorates the node above it, and there is none"),
+        ));
+    };
+    Ok(match column.cards.last_mut() {
+        Some(card) => (&mut card.icon, &mut card.classes),
+        None => (&mut column.icon, &mut column.classes),
+    })
 }
 
 /// `id`, `id[label]`, `[label]` or another mindmap bracket form; returns the
@@ -232,18 +285,13 @@ fn metadata(body: &str, card: &mut Card, line: usize) -> Result<(), Error> {
             }
             // Every card is drawn as a card, whichever shape is named.
             "shape" => {}
-            "icon" => {
-                return Err(Error::new(
-                    line,
-                    "card `icon` is not supported (see DESIGN.md)",
-                ));
-            }
+            "icon" => card.icon = Some(value).filter(|v| !v.is_empty()),
             other => {
                 return Err(Error::new(
                     line,
                     format!(
-                        "unknown card metadata `{other}`; expected assigned, ticket, priority \
-                         or label"
+                        "unknown card metadata `{other}`; expected assigned, ticket, priority, \
+                         icon or label"
                     ),
                 ));
             }
@@ -321,11 +369,32 @@ mod tests {
     }
 
     #[test]
+    fn icons_and_classes_decorate_the_node_above() {
+        let source = "kanban
+  todo[Todo]
+  ::icon(fa fa-list)
+    a[Fix it]@{ icon: heart, assigned: graham }
+    b[Ship it]
+    ::icon(fa fa-rocket)
+    :::urgent large
+";
+        let kanban = parse(source).unwrap();
+        let column = &kanban.columns[0];
+        assert_eq!(column.icon.as_deref(), Some("fa fa-list"));
+        assert_eq!(column.cards[0].icon.as_deref(), Some("heart"));
+        assert_eq!(column.cards[0].assigned.as_deref(), Some("graham"));
+        assert_eq!(column.cards[1].icon.as_deref(), Some("fa fa-rocket"));
+        assert_eq!(column.cards[1].classes, ["urgent", "large"]);
+    }
+
+    #[test]
     fn errors_carry_lines() {
         for (source, line, needle) in [
             ("kanban\n  a\n    b@{ priority: Urgent }\n", 3, "Urgent"),
-            ("kanban\n  a\n    b@{ icon: heart }\n", 3, "icon"),
-            ("kanban\n  a\n    b\n    ::icon(fa fa-book)\n", 4, "icon"),
+            ("kanban\n  ::icon(heart)\n  a\n", 2, "there is none"),
+            ("kanban\n  a\n    b[x]:::hot\n", 3, "own line"),
+            ("kanban\n  a\n    b\n    ::icon(heart\n", 4, "never closed"),
+            ("kanban\n  a\n    b\n    ::icon(heart) x\n", 4, "unexpected"),
             ("kanban\n    a\n  b\n", 3, "indented less"),
             ("kanban\n  a\n    b[open\n", 3, "never closed"),
             ("kanban\n  a\n    b@{ ticket: 1\n", 3, "never closed"),

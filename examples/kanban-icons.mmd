@@ -1,0 +1,13 @@
+%% showcase: kanban card icons and classes
+%% prose: A card names its icon in `icon:` metadata or on the line below it with `::icon()`; `:::` on its own line gives the card above it CSS classes. mmd bundles no icon fonts, so each icon is drawn as its name in a small tag at the start of the card's metadata row.
+%% approx: Icons are drawn as their name (`fa fa-rocket` reads rocket) in a muted tag, not as Font Awesome glyphs.
+%% approx: `:::` classes are kept but not drawn: kanban has no `classDef`, so in mermaid they only matter to a page's own CSS.
+kanban
+  todo[To do]
+    t1[Sign the release]@{ icon: heart, assigned: graham }
+    t2[Write the changelog]@{ ticket: MMD-52 }
+    ::icon(fa fa-book)
+  doing[In progress]
+    d1[Ship 2026.11]@{ ticket: MMD-50, assigned: claude, priority: 'High' }
+    ::icon(fa fa-rocket)
+    :::urgent
