@@ -1,0 +1,20 @@
+%% showcase: block diagram of a web service
+%% prose: Blocks sit on a three-column grid the author sets; `:2` spans two columns, `space` leaves a cell empty, and `block:id … end` nests a composite with its own columns. Block arrows point between neighbours; links run straight between outlines, with their label on a pill.
+%% approx: Block arrows are drawn as thick arrows across their cell, not as arrow-shaped blocks.
+%% approx: Links are straight lines between outlines, not routed around other blocks.
+block-beta
+  columns 3
+  Client(["Browser"]) arrow1<["HTTPS"]>(right) Edge{{"Load balancer"}}
+  space:2 arrow2<[" "]>(down)
+  block:services:3
+    columns 3
+    API["API service"] Worker[["Job worker"]] Cache[("Redis")]
+  end
+  space:3
+  space DB[("Postgres")]:2
+  API --> DB
+  Worker -- "writes" --> DB
+  Worker -.-> Cache
+  classDef edge fill:#ddf4ff,stroke:#0969da
+  class Edge edge
+  style DB fill:#dafbe1,stroke:#1a7f37

@@ -3,6 +3,10 @@
 mod layout;
 mod parse;
 
+/// Labels as lines, with markdown emphasis; shared with the types whose
+/// labels take the same markdown strings.
+pub(crate) use layout::text_lines;
+
 pub use parse::{
     Colors, Direction, End, Flowchart, LineKind, Link, LinkStyle, Node, NodeShape, Stroke,
     Subgraph, parse,

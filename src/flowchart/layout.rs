@@ -704,7 +704,7 @@ fn pen(chart: &Flowchart, i: usize) -> Pen {
 
 /// A label as lines: wrapped at `max_width`, in `font`, with markdown's
 /// `**bold**` and `*italic*` (or `__`/`_`) as bold and italic runs.
-fn text_lines(
+pub(crate) fn text_lines(
     measure: &dyn Measure,
     text: &str,
     markdown: bool,

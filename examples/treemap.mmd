@@ -1,0 +1,19 @@
+%% showcase: treemap of an engineering budget
+%% prose: Each leaf's area is its share of the total; sections carry their summed value in the header and nest their leaves inside. The highlighted leaf takes its colour from a classDef.
+%% approx: Leaves are outlined in their section's colour rather than filled with it.
+%% approx: Values are shown as written, without mermaid's valueFormat.
+treemap-beta
+title Engineering budget (k$)
+"Platform"
+    "Compute": 420
+    "Storage": 180
+    "Network": 90
+"Product"
+    "Web": 260
+    "Mobile": 210:::focus
+    "Design": 80
+"Tooling"
+    "CI": 70
+    "Observability": 60
+"Training": 40
+classDef focus fill:#f9d77e,stroke:#9a6700

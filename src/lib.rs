@@ -12,6 +12,7 @@
 //! See `DESIGN.md` for the supported syntax; anything outside it is a parse
 //! error carrying a line number, never a silent omission.
 
+pub mod block;
 pub mod c4;
 mod chart;
 pub mod class;
@@ -20,9 +21,13 @@ pub mod flowchart;
 pub mod gantt;
 pub mod gitgraph;
 mod graph;
+pub mod ishikawa;
 pub mod journey;
 pub mod kanban;
 mod layered;
+mod meta;
+pub mod mindmap;
+pub mod packet;
 pub mod pie;
 pub mod quadrant;
 pub mod radar;
@@ -33,6 +38,8 @@ pub mod state;
 mod style;
 pub mod text;
 pub mod timeline;
+pub mod treemap;
+pub mod treeview;
 pub mod xychart;
 
 use std::fmt;
@@ -70,6 +77,12 @@ pub enum Kind {
     Quadrant,
     Radar,
     Sankey,
+    Mindmap,
+    Treemap,
+    Packet,
+    Block,
+    TreeView,
+    Ishikawa,
 }
 
 impl Kind {
@@ -97,6 +110,12 @@ impl Kind {
         Kind::Quadrant,
         Kind::Radar,
         Kind::Sankey,
+        Kind::Mindmap,
+        Kind::Treemap,
+        Kind::Packet,
+        Kind::Block,
+        Kind::TreeView,
+        Kind::Ishikawa,
     ];
 
     /// The keyword that introduces this diagram.
@@ -123,6 +142,12 @@ impl Kind {
             Kind::Quadrant => "quadrantChart",
             Kind::Radar => "radar-beta",
             Kind::Sankey => "sankey",
+            Kind::Mindmap => "mindmap",
+            Kind::Treemap => "treemap",
+            Kind::Packet => "packet",
+            Kind::Block => "block",
+            Kind::TreeView => "treeView-beta",
+            Kind::Ishikawa => "ishikawa",
         }
     }
 
@@ -137,6 +162,10 @@ impl Kind {
             Kind::Requirement => &["requirement"],
             Kind::XyChart => &["xychart-beta"],
             Kind::Sankey => &["sankey-beta"],
+            Kind::Treemap => &["treemap-beta"],
+            Kind::Packet => &["packet-beta"],
+            Kind::Block => &["block-beta"],
+            Kind::Ishikawa => &["ishikawa-beta"],
             _ => &[],
         }
     }
@@ -245,6 +274,12 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         Some(Kind::Quadrant) => quadrant::scene(source, measure),
         Some(Kind::Radar) => radar::scene(source, measure),
         Some(Kind::Sankey) => sankey::scene(source, measure),
+        Some(Kind::Mindmap) => mindmap::scene(source, measure),
+        Some(Kind::Treemap) => treemap::scene(source, measure),
+        Some(Kind::Packet) => packet::scene(source, measure),
+        Some(Kind::Block) => block::scene(source, measure),
+        Some(Kind::TreeView) => treeview::scene(source, measure),
+        Some(Kind::Ishikawa) => ishikawa::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {
