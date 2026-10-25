@@ -15,10 +15,14 @@
 pub mod c4;
 pub mod er;
 pub mod flowchart;
+pub mod gantt;
 pub mod gitgraph;
+pub mod journey;
+pub mod kanban;
 mod layered;
 mod style;
 pub mod text;
+pub mod timeline;
 
 use std::fmt;
 
@@ -45,6 +49,10 @@ pub enum Kind {
     C4Dynamic,
     /// Recognised so its error comes from the C4 parser; not yet supported.
     C4Deployment,
+    Gantt,
+    Timeline,
+    Journey,
+    Kanban,
 }
 
 impl Kind {
@@ -59,6 +67,10 @@ impl Kind {
         Kind::C4Dynamic,
         Kind::C4Deployment,
         Kind::Er,
+        Kind::Gantt,
+        Kind::Timeline,
+        Kind::Journey,
+        Kind::Kanban,
     ];
 
     /// The keyword that introduces this diagram.
@@ -72,6 +84,10 @@ impl Kind {
             Kind::C4Component => "C4Component",
             Kind::C4Dynamic => "C4Dynamic",
             Kind::C4Deployment => "C4Deployment",
+            Kind::Gantt => "gantt",
+            Kind::Timeline => "timeline",
+            Kind::Journey => "journey",
+            Kind::Kanban => "kanban",
         }
     }
 
@@ -175,6 +191,10 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         Some(Kind::Er) => er::scene(source, measure),
+        Some(Kind::Gantt) => gantt::scene(source, measure),
+        Some(Kind::Timeline) => timeline::scene(source, measure),
+        Some(Kind::Journey) => journey::scene(source, measure),
+        Some(Kind::Kanban) => kanban::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {

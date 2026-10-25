@@ -1,0 +1,20 @@
+%% showcase: gantt with excluded days and a marker
+%% prose: Weekends and a public holiday are excluded: shaded columns, and every duration counts working days only, so a task that reaches a weekend resumes on Monday. The vertical line marks a fixed date across every row.
+%% approx: Excluded days are tinted rather than mermaid's grey, and `todayMarker` is accepted but never drawn: a static render has no "today".
+%% approx: A `vert` marker takes no row of its own; its name sits under the axis.
+gantt
+    title Sprint 14
+    dateFormat YYYY-MM-DD
+    axisFormat %a %e
+    tickInterval 1day
+    excludes weekends, 2026-03-17
+    todayMarker off
+    section Backend
+    API schema            :done, a1, 2026-03-09, 2d
+    Endpoints             :crit, a2, after a1, 3d
+    Load test             :a3, after a2, 2d
+    section Frontend
+    Wireframes            :done, b1, 2026-03-09, 3d
+    Screens               :active, b2, after b1, 4d
+    section Milestones
+    Demo                  :vert, demo, 2026-03-18, 0d
