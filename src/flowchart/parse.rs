@@ -5,6 +5,8 @@
 //! colours on nodes and subgraphs, `linkStyle`, `click`, accessibility
 //! statements and markdown strings.
 
+pub use crate::style::{Colors, Rgb};
+use crate::style::{color, colors, dash_length, declarations, number as length};
 use crate::{Error, strip_comment};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,27 +73,6 @@ pub enum End {
     Arrow,
     Circle,
     Cross,
-}
-
-pub type Rgb = (u8, u8, u8);
-
-/// Colours set in the source, as `#rrggbb` triples.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Colors {
-    pub fill: Option<Rgb>,
-    pub stroke: Option<Rgb>,
-    pub text: Option<Rgb>,
-    pub dashed: bool,
-}
-
-impl Colors {
-    /// `other`'s colours over these.
-    fn merge(&mut self, other: &Colors) {
-        self.fill = other.fill.or(self.fill);
-        self.stroke = other.stroke.or(self.stroke);
-        self.text = other.text.or(self.text);
-        self.dashed |= other.dashed;
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -422,7 +403,7 @@ impl Parser {
                 if names.is_empty() {
                     return Err(Error::new(number, "`classDef` needs a class name"));
                 }
-                let colors = colors(&declarations(words.next().unwrap_or(""), number)?);
+                let colors = colors(&declarations(words.next().unwrap_or(""), number)?, number)?;
                 for name in names.split(',') {
                     chart.classes.push((name.trim().to_string(), colors));
                 }
@@ -452,7 +433,7 @@ impl Parser {
                 if id.is_empty() {
                     return Err(Error::new(number, "expected `style <id> <styles>`"));
                 }
-                let colors = colors(&declarations(words.next().unwrap_or(""), number)?);
+                let colors = colors(&declarations(words.next().unwrap_or(""), number)?, number)?;
                 if let Some(sub) = chart.subgraphs.iter_mut().find(|s| s.id == id) {
                     sub.style.merge(&colors);
                 } else {
@@ -497,7 +478,7 @@ impl Parser {
         if styles.is_empty() && !curved {
             return Err(Error::new(number, "`linkStyle` needs styles"));
         }
-        let style = link_style(&declarations(styles, number)?);
+        let style = link_style(&declarations(styles, number)?, number)?;
         let apply = !styles.is_empty();
         if targets == "default" {
             if apply {
@@ -1223,102 +1204,28 @@ fn node_index(chart: &mut Flowchart, id: &str, stack: &[usize], number: usize) -
     chart.nodes.len() - 1
 }
 
-/// CSS-ish `fill:#f9f,stroke:#333,stroke-dasharray:5 5`, as pairs.
-fn declarations(text: &str, number: usize) -> Result<Vec<(String, String)>, Error> {
-    let mut out = Vec::new();
-    for part in text.split([',', ';']) {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
+/// A link's stroke, stroke-width, stroke-dasharray and color. `fill` (always
+/// `none` on a link) and font properties have nothing to apply to.
+fn link_style(declarations: &[(String, String)], number: usize) -> Result<LinkStyle, Error> {
+    let mut out = LinkStyle::default();
+    for (key, value) in declarations {
+        match key.as_str() {
+            "stroke" => out.stroke = Some(color(value, number)?),
+            "stroke-width" => out.width = Some(length(value, number, "stroke-width")?),
+            "stroke-dasharray" => out.dash = Some(dash(value, number)?),
+            "color" => out.color = Some(color(value, number)?),
+            _ => {}
         }
-        let (key, value) = part.split_once(':').ok_or_else(|| {
-            Error::new(
-                number,
-                format!("expected `property:value` in styles, found `{part}`"),
-            )
-        })?;
-        out.push((key.trim().to_string(), value.trim().to_string()));
     }
     Ok(out)
 }
 
-/// A node's or subgraph's colours: fill, stroke, color and
-/// stroke-dasharray. Other properties (stroke-width, font-*) are fine
-/// styling the scene doesn't carry.
-fn colors(declarations: &[(String, String)]) -> Colors {
-    let mut out = Colors::default();
-    for (key, value) in declarations {
-        match key.as_str() {
-            "fill" | "background" => out.fill = color(value),
-            "stroke" => out.stroke = color(value),
-            "color" => out.text = color(value),
-            "stroke-dasharray" => out.dashed = dash(value) != Stroke::Solid,
-            _ => {}
-        }
-    }
-    out
-}
-
-/// A link's stroke, stroke-width, stroke-dasharray and color. `fill` (always
-/// `none` on a link) and font properties have nothing to apply to.
-fn link_style(declarations: &[(String, String)]) -> LinkStyle {
-    let mut out = LinkStyle::default();
-    for (key, value) in declarations {
-        match key.as_str() {
-            "stroke" => out.stroke = color(value),
-            "stroke-width" => {
-                out.width = value
-                    .trim_end_matches("px")
-                    .trim()
-                    .parse::<f32>()
-                    .ok()
-                    .filter(|w| w.is_finite() && *w >= 0.0)
-            }
-            "stroke-dasharray" => out.dash = Some(dash(value)),
-            "color" => out.color = color(value),
-            _ => {}
-        }
-    }
-    out
-}
-
 /// `5 5` is dashed, `2 2` or shorter dotted, `0` or `none` solid.
-fn dash(value: &str) -> Stroke {
-    let first = value
-        .split([' ', ','])
-        .find(|s| !s.is_empty())
-        .and_then(|s| s.trim_end_matches("px").parse::<f32>().ok());
-    match first {
+fn dash(value: &str, number: usize) -> Result<Stroke, Error> {
+    Ok(match dash_length(value, number)? {
         None | Some(0.0) => Stroke::Solid,
         Some(on) if on <= 2.5 => Stroke::Dotted,
         Some(_) => Stroke::Dashed,
-    }
-}
-
-/// `#rgb`, `#rrggbb` or a few names.
-fn color(value: &str) -> Option<Rgb> {
-    let hex = |s: &str| u8::from_str_radix(s, 16).ok();
-    if let Some(h) = value.strip_prefix('#') {
-        return match h.len() {
-            3 | 4 => {
-                let d = |i: usize| hex(&h[i..i + 1]).map(|v| v * 17);
-                Some((d(0)?, d(1)?, d(2)?))
-            }
-            6 | 8 => Some((hex(&h[0..2])?, hex(&h[2..4])?, hex(&h[4..6])?)),
-            _ => None,
-        };
-    }
-    Some(match value.to_ascii_lowercase().as_str() {
-        "white" => (255, 255, 255),
-        "black" => (0, 0, 0),
-        "red" => (220, 38, 38),
-        "green" => (22, 163, 74),
-        "blue" => (37, 99, 235),
-        "yellow" => (250, 204, 21),
-        "orange" => (249, 115, 22),
-        "purple" => (147, 51, 234),
-        "gray" | "grey" => (128, 128, 128),
-        _ => return None,
     })
 }
 
@@ -1656,11 +1563,30 @@ mod tests {
         let style = |i: usize| chart.link_style(&chart.links[i]);
         assert_eq!(style(0).stroke, Some((0xff, 0xff, 0x33)));
         assert_eq!(style(0).width, Some(4.0));
-        assert_eq!(style(0).color, Some((220, 38, 38)));
+        assert_eq!(style(0).color, Some((255, 0, 0)));
         assert_eq!(style(2), style(0));
         // `interpolate` alone leaves link 1 on the default.
         assert_eq!(style(1).stroke, Some((0x99, 0x99, 0x99)));
         assert_eq!(style(1).dash, Some(Stroke::Dotted));
+    }
+
+    #[test]
+    fn an_unreadable_colour_or_width_is_an_error() {
+        for (source, names) in [
+            ("flowchart TD\n  A\n  style A fill:blurple\n", "blurple"),
+            (
+                "flowchart TD\n  A\n  classDef x stroke:hsl(0,0%,0%)\n",
+                "hsl",
+            ),
+            (
+                "flowchart TD\n  A --> B\n  linkStyle 0 stroke-width:thick\n",
+                "thick",
+            ),
+        ] {
+            let e = error(source);
+            assert_eq!(e.line, 3, "{source}");
+            assert!(e.message.contains(names), "{e}");
+        }
     }
 
     #[test]

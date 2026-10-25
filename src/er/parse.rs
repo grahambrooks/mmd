@@ -6,6 +6,7 @@
 //! Grammar checked against mermaid's
 //! `packages/mermaid/src/diagrams/er/parser/erDiagram.jison`.
 
+pub use crate::style::Colors;
 use crate::{Error, strip_comment};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,23 +29,6 @@ pub enum Cardinality {
 }
 
 /// Colours set in the source, as `#rrggbb` triples.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Colors {
-    pub fill: Option<(u8, u8, u8)>,
-    pub stroke: Option<(u8, u8, u8)>,
-    pub text: Option<(u8, u8, u8)>,
-    pub dashed: bool,
-}
-
-impl Colors {
-    /// `other`'s colours over these.
-    fn merge(&mut self, other: &Colors) {
-        self.fill = other.fill.or(self.fill);
-        self.stroke = other.stroke.or(self.stroke);
-        self.text = other.text.or(self.text);
-        self.dashed |= other.dashed;
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
@@ -215,7 +199,7 @@ pub fn parse(source: &str) -> Result<Er, Error> {
             "classDef" => {
                 let mut words = rest.splitn(2, char::is_whitespace);
                 let names = words.next().unwrap_or("");
-                let colors = css(words.next().unwrap_or(""));
+                let colors = css(words.next().unwrap_or(""), number)?;
                 for name in names.split(',') {
                     er.classes.push((name.trim().to_string(), colors));
                 }
@@ -240,7 +224,7 @@ pub fn parse(source: &str) -> Result<Er, Error> {
             "style" => {
                 let mut words = rest.splitn(2, char::is_whitespace);
                 let ids = words.next().unwrap_or("");
-                let colors = css(words.next().unwrap_or(""));
+                let colors = css(words.next().unwrap_or(""), number)?;
                 for id in ids.split(',') {
                     let entity = er.entity(id.trim());
                     er.entities[entity].style.merge(&colors);
@@ -513,49 +497,8 @@ fn attributes(tokens: &[(Token, usize)], close: usize) -> Result<Vec<Attribute>,
 }
 
 /// CSS-ish `fill:#f9f,stroke:#333,color:#fff,stroke-dasharray:5 5`.
-fn css(text: &str) -> Colors {
-    let mut out = Colors::default();
-    for part in text.split([',', ';']) {
-        let Some((key, value)) = part.split_once(':') else {
-            continue;
-        };
-        let value = value.trim();
-        match key.trim() {
-            "fill" | "background" => out.fill = color(value),
-            "stroke" => out.stroke = color(value),
-            "color" => out.text = color(value),
-            "stroke-dasharray" => out.dashed = true,
-            _ => {}
-        }
-    }
-    out
-}
-
-/// `#rgb`, `#rrggbb` or a few names.
-fn color(value: &str) -> Option<(u8, u8, u8)> {
-    let hex = |s: &str| u8::from_str_radix(s, 16).ok();
-    if let Some(h) = value.strip_prefix('#') {
-        return match h.len() {
-            3 | 4 => {
-                let d = |i: usize| hex(&h[i..i + 1]).map(|v| v * 17);
-                Some((d(0)?, d(1)?, d(2)?))
-            }
-            6 | 8 => Some((hex(&h[0..2])?, hex(&h[2..4])?, hex(&h[4..6])?)),
-            _ => None,
-        };
-    }
-    Some(match value.to_ascii_lowercase().as_str() {
-        "white" => (255, 255, 255),
-        "black" => (0, 0, 0),
-        "red" => (220, 38, 38),
-        "green" => (22, 163, 74),
-        "blue" => (37, 99, 235),
-        "yellow" => (250, 204, 21),
-        "orange" => (249, 115, 22),
-        "purple" => (147, 51, 234),
-        "gray" | "grey" => (128, 128, 128),
-        _ => return None,
-    })
+fn css(text: &str, number: usize) -> Result<Colors, Error> {
+    crate::style::colors(&crate::style::declarations(text, number)?, number)
 }
 
 struct Cursor<'a> {
@@ -774,6 +717,13 @@ mod tests {
 
     fn error(body: &str) -> Error {
         parse(&format!("erDiagram\n{body}")).unwrap_err()
+    }
+
+    #[test]
+    fn an_unreadable_colour_is_an_error() {
+        let e = parse("erDiagram\n  A\n  style A fill:blurple\n").unwrap_err();
+        assert_eq!(e.line, 3);
+        assert!(e.message.contains("blurple"), "{e}");
     }
 
     #[test]

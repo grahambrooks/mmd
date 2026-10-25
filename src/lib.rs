@@ -17,6 +17,7 @@ pub mod er;
 pub mod flowchart;
 pub mod gitgraph;
 mod layered;
+mod style;
 pub mod text;
 
 use std::fmt;
@@ -165,11 +166,21 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         Some(Kind::Er) => er::scene(source, measure),
-        None => Err(Error::new(
-            first_content_line(source),
-            "unrecognised diagram: expected one of `flowchart`, `erDiagram`, `gitGraph`, \
+        None => {
+            let line = first_content_line(source);
+            if source.lines().nth(line - 1).map(str::trim) == Some("---") {
+                return Err(Error::new(
+                    line,
+                    "YAML front matter (`---`) is not supported; use `title` where the \
+                     diagram takes one (see DESIGN.md)",
+                ));
+            }
+            Err(Error::new(
+                line,
+                "unrecognised diagram: expected one of `flowchart`, `erDiagram`, `gitGraph`, \
              `C4Context`, `C4Container`, `C4Component`",
-        )),
+            ))
+        }
     }
 }
 
@@ -217,6 +228,14 @@ mod tests {
             detect("\n%% a comment\n\ngitGraph\n  commit\n"),
             Some(Kind::GitGraph)
         );
+    }
+
+    #[test]
+    fn front_matter_is_named_in_its_error() {
+        let error =
+            render_with("\n---\ntitle: x\n---\ngraph\n", &Theme::default(), &Fixed).unwrap_err();
+        assert_eq!(error.line, 2);
+        assert!(error.message.contains("front matter"), "{error}");
     }
 
     #[test]
