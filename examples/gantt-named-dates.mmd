@@ -1,0 +1,14 @@
+%% showcase: gantt dateFormat with month and day names
+%% prose: Dates are written the way people say them: `ddd MMM Do YYYY h:mm A` reads `Mon Jan 5th 2026 9:00 AM`. Month and day names are English and case-insensitive; the weekday is checked to be a weekday name and then ignored, as moment ignores it, so the date fields decide the day.
+%% approx: A `Z`/`ZZ` offset converts the time to UTC; the chart has no local zone to convert it back into.
+gantt
+    title Launch week
+    dateFormat ddd MMM Do YYYY h:mm A
+    axisFormat %a %-d %b
+    tickInterval 1day
+    section Build
+    Kickoff        :k1, Mon Jan 5th 2026 9:00 AM, 4h
+    Prototype      :p1, after k1, 2d
+    Review         :r1, Wed Jan 7th 2026 2:30 PM, 1d
+    section Ship
+    Release        :milestone, m1, Fri Jan 9th 2026 5:00 PM, 0d

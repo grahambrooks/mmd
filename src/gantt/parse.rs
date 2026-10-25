@@ -765,8 +765,8 @@ mod tests {
             ("gantt\nA :3d\n", 2, "first task"),
             ("gantt\nA :2024-01-01, soon\n", 2, "soon"),
             ("gantt\nA :tomorrow, 1d\n", 2, "tomorrow"),
-            ("gantt\ndateFormat MMM D\n", 2, "MMM"),
-            ("gantt\naxisFormat %Q\n", 2, "%Q"),
+            ("gantt\ndateFormat YYYY-ww\n", 2, "ww"),
+            ("gantt\naxisFormat %k\n", 2, "%k"),
             ("gantt\nexcludes holidays\n", 2, "holidays"),
             (
                 "gantt\nA :a, after b, 1d\nB :b, after a, 1d\n",
