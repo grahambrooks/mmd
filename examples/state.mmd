@@ -1,0 +1,35 @@
+%% showcase: stateDiagram with composite states
+%% prose: An order's life cycle. Start and end dots belong to their scope, so the composite Fulfilment has its own; a choice diamond splits on payment, and a fork and join run packing and invoicing side by side. Transitions may end on a composite's box, and notes sit beside their state.
+%% approx: Layout is mmd's layered algorithm, not dagre, so states sit in different places than mermaid puts them.
+%% approx: A composite state's title sits at its top-left inside the box, not in a separate title band.
+%% approx: Notes are joined to their state by a dashed line; in a left-right flow a note goes above or below its state instead of left or right.
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Submitted : submit
+    Submitted --> paid
+    state paid <<choice>>
+    paid --> Fulfilment : payment cleared
+    paid --> Draft : declined
+    state Fulfilment {
+        [*] --> Picking
+        Picking --> split
+        state split <<fork>>
+        split --> Packing
+        split --> Invoicing
+        state done <<join>>
+        Packing --> done
+        Invoicing --> done
+        done --> [*]
+    }
+    Fulfilment --> Shipped : hand to carrier
+    Shipped --> Delivered
+    Delivered --> [*]
+    Shipped : tracked
+    Shipped : insured
+    note right of Draft : editable by the customer
+    note left of Shipped
+        Carrier updates
+        arrive by webhook
+    end note
+    classDef warn fill:#fde68a,stroke:#b45309
+    class paid warn

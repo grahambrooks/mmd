@@ -13,10 +13,14 @@
 //! error carrying a line number, never a silent omission.
 
 pub mod c4;
+pub mod class;
 pub mod er;
 pub mod flowchart;
 pub mod gitgraph;
+mod graph;
 mod layered;
+pub mod requirement;
+pub mod state;
 mod style;
 pub mod text;
 
@@ -45,6 +49,9 @@ pub enum Kind {
     C4Dynamic,
     /// Recognised so its error comes from the C4 parser; not yet supported.
     C4Deployment,
+    State,
+    Class,
+    Requirement,
 }
 
 impl Kind {
@@ -59,6 +66,9 @@ impl Kind {
         Kind::C4Dynamic,
         Kind::C4Deployment,
         Kind::Er,
+        Kind::State,
+        Kind::Class,
+        Kind::Requirement,
     ];
 
     /// The keyword that introduces this diagram.
@@ -72,6 +82,9 @@ impl Kind {
             Kind::C4Component => "C4Component",
             Kind::C4Dynamic => "C4Dynamic",
             Kind::C4Deployment => "C4Deployment",
+            Kind::State => "stateDiagram-v2",
+            Kind::Class => "classDiagram",
+            Kind::Requirement => "requirementDiagram",
         }
     }
 
@@ -80,6 +93,9 @@ impl Kind {
         match self {
             // `graph` is the older name for a flowchart.
             Kind::Flowchart => &["graph"],
+            Kind::State => &["stateDiagram"],
+            Kind::Class => &["classDiagram-v2"],
+            Kind::Requirement => &["requirement"],
             _ => &[],
         }
     }
@@ -175,6 +191,9 @@ pub fn scene(source: &str, measure: &dyn Measure) -> Result<Scene, Error> {
         ) => c4::scene(source, measure),
         Some(Kind::Flowchart) => flowchart::scene(source, measure),
         Some(Kind::Er) => er::scene(source, measure),
+        Some(Kind::State) => state::scene(source, measure),
+        Some(Kind::Class) => class::scene(source, measure),
+        Some(Kind::Requirement) => requirement::scene(source, measure),
         None => {
             let line = first_content_line(source);
             if source.lines().nth(line - 1).map(str::trim) == Some("---") {

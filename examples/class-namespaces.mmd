@@ -1,0 +1,31 @@
+%% showcase: classDiagram with namespaces and styles
+%% prose: Namespaces are boxes around their classes, nested where the names nest; relations cross them freely. A lollipop end marks a provided interface, and classDef, cssClass and style colour individual classes.
+%% approx: A lollipop interface is drawn as a small labelled circle joined by a plain line, not a circle hung off the class's edge.
+%% approx: `click`, `link` and `callback` are accepted and not drawn.
+classDiagram
+    direction LR
+    namespace Billing {
+        class Invoice {
+            +String number
+            +total() Money
+        }
+        class Payment {
+            +Money amount
+        }
+    }
+    namespace Billing.Tax {
+        class VatRule {
+            +rate(region) double
+        }
+    }
+    class Customer["Customer account"] {
+        +String email
+    }
+    Customer "1" --> "*" Invoice : receives
+    Invoice "1" --> "0..*" Payment : settled by
+    Invoice ..> VatRule
+    Exportable ()-- Invoice
+    classDef external fill:#e0f2fe,stroke:#0369a1
+    cssClass "Customer" external
+    style VatRule stroke:#b91c1c,stroke-dasharray:4 2
+    click Invoice href "https://example.com/invoice"

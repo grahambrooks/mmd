@@ -1,0 +1,45 @@
+%% showcase: requirementDiagram
+%% prose: Each requirement is a box of its kind, name and fields; elements are the things that satisfy or verify them. `contains` is solid from the container, every other relationship dashed with an open arrow and its kind as the label.
+%% approx: `contains` starts with a plain circle, not mermaid's circle with a cross.
+%% approx: Layout is mmd's layered algorithm, not dagre.
+requirementDiagram
+    requirement export_pdf {
+        id: 1
+        text: Every diagram can be exported to PDF.
+        risk: high
+        verifymethod: test
+    }
+    functionalRequirement keep_labels {
+        id: 1.1
+        text: Labels survive SVG to PDF conversion.
+        risk: medium
+        verifymethod: inspection
+    }
+    performanceRequirement fast {
+        id: 1.2
+        text: A page renders in under 50 ms.
+        risk: low
+        verifymethod: analysis
+    }
+    designConstraint pure_rust {
+        id: 2
+        text: No JavaScript or C toolchain.
+        risk: low
+        verifymethod: inspection
+    }
+    element renderer {
+        type: crate
+        docRef: src/lib.rs
+    }
+    element render_tests {
+        type: test suite
+        docRef: tests/render.rs
+    }
+    export_pdf - contains -> keep_labels
+    export_pdf - contains -> fast
+    keep_labels - derives -> pure_rust
+    renderer - satisfies -> keep_labels
+    render_tests - verifies -> keep_labels
+    render_tests - verifies -> fast
+    classDef risky fill:#fee2e2,stroke:#b91c1c
+    export_pdf:::risky
