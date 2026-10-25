@@ -52,8 +52,8 @@ Two things worth knowing before editing a layout:
 
 ## Adding a diagram type
 
-Every upstream type except `zenuml` already has a module, so this is rare
-now. When it happens, the type needs:
+Every upstream type, `zenuml` included, already has a module, so this is
+rare now. When it happens, the type needs:
 
 - `src/<type>/{mod,parse,layout}.rs`.
 - In `lib.rs`: a `Kind` variant, an entry in `Kind::ALL`, `keyword()`,
@@ -82,7 +82,7 @@ worth narrowing, and work blocked on `diagram-scene`.
 ## Unsupported is an error, not an omission
 
 Anything outside the subset in DESIGN.md must fail with a line number and name
-the construct — `` a venn diagram of more than 3 sets is not supported (see DESIGN.md) ``. That
+the construct — `` `ref` is not supported in zenuml (see DESIGN.md) ``. That
 includes values: a colour that cannot be read is an error, not a fallback to
 the theme. The few statements that are accepted but not drawn are listed in
 DESIGN.md, and none of them may lose an element. A diagram that quietly

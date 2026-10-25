@@ -1,6 +1,6 @@
 ---
 name: render-mermaid
-description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the flowchart / sequence / class / gantt diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Renders 32 of mermaid's 33 diagram types — everything except the external `zenuml` plugin — with recorded approximations.
+description: Render a Mermaid diagram to a standalone SVG with the `mmd` CLI (pure Rust, no Node or browser). Use when the user asks to "render this mermaid diagram", "turn this .mmd into an SVG", "export the flowchart / sequence / class / gantt diagram as an image", or needs diagram SVG whose labels survive conversion to PDF (real `<text>`, no `<foreignObject>`). Renders all 33 of mermaid's diagram types, including the external `zenuml` plugin, with recorded approximations.
 argument-hint: <diagram.mmd> [-o out.svg]
 ---
 
@@ -49,7 +49,7 @@ Write mermaid as you normally would. The first line that is not blank or a
 |:---|:---|
 | Graphs | `flowchart` (`graph`, `flowchart-elk`), `stateDiagram-v2` (`stateDiagram`), `classDiagram` (`classDiagram-v2`), `erDiagram`, `requirementDiagram` (`requirement`), `block` (`block-beta`) |
 | Architecture | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`, `architecture-beta` (`architecture`) |
-| Interactions | `sequenceDiagram`, `gitGraph`, `eventmodeling` |
+| Interactions | `sequenceDiagram`, `zenuml`, `gitGraph`, `eventmodeling` |
 | Time | `gantt`, `timeline`, `journey`, `kanban` |
 | Charts | `pie`, `xychart` (`xychart-beta`), `quadrantChart`, `radar-beta`, `sankey` (`sankey-beta`) |
 | Trees and maps | `mindmap`, `treemap` (`treemap-beta`), `treeView-beta`, `ishikawa` (`ishikawa-beta`), `packet` (`packet-beta`), `venn-beta`, `wardley-beta` |
@@ -85,20 +85,22 @@ typos are errors, not silently ignored.
   - Participants and actors, `box`, `create`/`destroy`, every arrow type and
     activations.
   - Notes, the frames `loop`/`alt`/`opt`/`par`/`critical`/`break`/`rect`, and
-    `autonumber`.
+    `autonumber`, including decimals (`autonumber 1.1 0.1`).
 - **classDiagram:**
   - Members, generics `~T~`, annotations and every relation.
   - Cardinalities `"1" --> "*"`, namespaces and notes.
 - **stateDiagram-v2:**
   - `[*]`, composites and `--` concurrency.
   - `<<choice>>`, `<<fork>>`, `<<join>>`, notes and `direction`.
-  - Start a composite's body on the line after its `{`.
+  - A composite's body may share the line with its braces.
 - **erDiagram:**
   - Every cardinality, written as symbols or words.
   - Every relationship needs `: label`; quote a label with spaces.
 - **gantt:**
-  - `dateFormat` takes numeric tokens only (`YYYY-MM-DD`, `X`, …), not month
-    names. `axisFormat` takes strftime directives, not week numbers.
+  - `dateFormat` takes moment.js tokens, including month and weekday names
+    (`MMM D YYYY`, `Do`, `h:mm A`). It does not take week dates (`GGGG-[W]WW`).
+  - `axisFormat` takes every strftime directive, including week numbers
+    (`%V`, `%W`).
   - `after`, `until`, `excludes weekends`, milestones and `crit` all work.
 - **gitGraph:**
   - `LR`/`TB`/`BT`.
@@ -110,22 +112,26 @@ typos are errors, not silently ignored.
   - `UpdateElementStyle`, `UpdateRelStyle` and tags.
   - Elements are placed in declaration order, so declare related elements
     next to each other.
-- **venn-beta:** at most three sets.
+- **venn-beta:** any number of sets. Four sets use the classic four-ellipse
+  diagram. With five or more, a union the circles cannot form is an error.
+- **zenuml:** parsed into the sequence model.
+  - Supported: participants and annotators, `group`, calls `A.m()` with
+    `{ … }` bodies, `x = A.m()`, `return`, `new`, async `A->B: text`, `//`
+    comments, `if`/`while`/`for`/`try`/`par`/`opt`.
+  - Not supported: `ref(…)` and `==dividers==`.
+- **kanban:** a card's `icon` is drawn as a tag with its name.
 
 ## What it cannot render — do not generate these
 
-- `zenuml`: an external plugin. Use `sequenceDiagram` instead.
 - These known gaps fail with an error naming them:
-  - gantt month-name date formats (`MMM`, `Do`);
-  - gantt week-number axis labels (`%W`, `%U`, `%V`);
-  - decimal sequence `autonumber`;
-  - a state composite body on its `{` line;
-  - kanban card icons;
-  - venn diagrams with four or more sets.
+  - zenuml `ref(…)` and `==dividers==`;
+  - gantt week-date tokens (`GGGG`, `WW`, `E`, `DDDD`);
+  - venn diagrams of five or more sets where every pair intersects.
 - **Accepted but not drawn:**
   - `accTitle`/`accDescr`;
   - `click`/`link`/`callback` and other interactions;
-  - icons such as `::icon()`, `$sprite` and Font Awesome glyphs;
+  - icons such as `::icon()`, `$sprite` and Font Awesome glyphs (kanban
+    shows the icon's name);
   - gitGraph `msg:`;
   - gantt `todayMarker`.
 
@@ -140,8 +146,9 @@ construct:
 ```
 mmd: x.mmd: line 1: unrecognised diagram: expected one of `flowchart`, `gitGraph`, … (every keyword above)
 mmd: x.mmd: line 2: front matter key `layout` is not supported; expected `title`, `config` or `displayMode` (see DESIGN.md)
-mmd: x.mmd: line 4: dateFormat token `MMM` is not supported; use YYYY, YY, MM, M, DD, D, HH, H, mm, m, ss, s, SSS, X or x (see DESIGN.md)
-mmd: x.mmd: line 7: a venn diagram of more than 3 sets is not supported (see DESIGN.md)
+mmd: x.mmd: line 4: dateFormat token `GGGG` is not supported; use YYYY, YY, Y, Q, MMMM, MMM, … (see DESIGN.md)
+mmd: x.mmd: line 5: `ref` is not supported in zenuml (see DESIGN.md)
+mmd: x.mmd: line 10: `union A,C` cannot be drawn: in mmd's approximate layout of 5 sets those sets share no region of their own (see DESIGN.md)
 mmd: x.mmd: line 3: unrecognised colour `blurple` (see DESIGN.md)
 mmd: x.mmd: line 3: unknown branch `nope`
 mmd: x.mmd: line 2: a relationship needs a label: `A ||--o{ B : label`
@@ -163,21 +170,21 @@ grep -c '<text' diagram.svg     # > 0: labels are present
 ```bash
 cat > "$TMPDIR/plan.mmd" <<'END'
 gantt
-    dateFormat MMM D YYYY
-    Kickoff :a1, Jan 5 2026, 3d
+    dateFormat GGGG-[W]WW-E
+    Kickoff :a1, 2026-W02-1, 3d
 END
 mmd "$TMPDIR/plan.mmd"
-# exit 1, no SVG — dateFormat token `MMM` is not supported
+# exit 1, no SVG — dateFormat token `GGGG` is not supported
 ```
 
-Use a numeric date format:
+Use a calendar date format instead; month names are fine:
 
 ```bash
 cat > "$TMPDIR/plan.mmd" <<'END'
 gantt
-    dateFormat YYYY-MM-DD
+    dateFormat MMM D YYYY
     section Build
-    Kickoff :a1, 2026-01-05, 3d
+    Kickoff :a1, Jan 5 2026, 3d
     Parser  :after a1, 1w
 END
 mmd "$TMPDIR/plan.mmd" -o "$TMPDIR/plan.svg" && test -s "$TMPDIR/plan.svg"

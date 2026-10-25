@@ -95,7 +95,8 @@ page, so no element is lost:
   `details` menus; C4 `$link`.
 - Animation and curve choice: flowchart edge `animate`, `interpolate`/`curve:`.
 - Icons, which need an icon font: C4 `$sprite`, mindmap `::icon()`, and
-  architecture group icons. Architecture service icons are drawn as a simple
+  architecture group icons. Kanban card icons are drawn as a tag carrying the
+  icon's name. Architecture service icons are drawn as a simple
   glyph instead.
 - gitGraph `msg:`, because mermaid's renderer never draws it either; gantt
   `todayMarker`, because a static render has no "today"; mindmap `:::class`,
@@ -395,7 +396,8 @@ self-loops, block groups and pinned notes):
 - **`stateDiagram-v2`** (alias `stateDiagram`):
   - states, `state "desc" as id`, `id : desc`, and transitions with labels;
   - `[*]` per scope;
-  - composites `state X { … }`, nesting, with `--` concurrency regions;
+  - composites `state X { … }`, nesting, with `--` concurrency regions; a
+    body may share a line with its braces (`state Door { Open --> Closed }`);
   - `<<choice>>`/`<<fork>>`/`<<join>>`;
   - notes, including multi-line and floating notes;
   - `direction` per composite;
@@ -425,7 +427,8 @@ self-loops, block groups and pinned notes):
   - messages and activations:
     - every arrow, including half-arrows (drawn as whole arrows);
     - activations, with `+`/`-` or `activate`/`deactivate`;
-    - `autonumber [start [step]] | off`.
+    - `autonumber [start [step]] | off`, with up to two decimals
+      (`autonumber 1.1 0.1`), kept as exact hundredths.
   - notes and frames:
     - notes left of, right of or over;
     - frames: `loop`, `alt`/`else`, `opt`, `par`/`and`, `par_over`,
@@ -433,7 +436,6 @@ self-loops, block groups and pinned notes):
   - text:
     - entities `#59;`;
     - `wrap:`/`nowrap:`.
-  - Gap: decimal autonumber.
 
 **Charts** (`src/chart.rs` holds shared ticks, legends, arcs and fills):
 
@@ -458,14 +460,18 @@ self-loops, block groups and pinned notes):
 **Time and columns:**
 
 - **`gantt`**:
-  - `dateFormat`: the numeric moment.js tokens and `X`/`x`.
-  - `axisFormat`: d3 strftime directives, except week numbers.
+  - `dateFormat`: the moment.js tokens, including month and weekday names,
+    `Do`, 12-hour `A`, `Q` and `Z` offsets (converted to UTC), plus `X`/`x`.
+    Letters that are no token are literal, as in dayjs.
+  - `axisFormat`: every d3-time-format directive, including the week numbers
+    `%U`, `%W` and `%V` and the ISO week-year `%G`.
   - `tickInterval`, `weekday`, `topAxis`.
   - `excludes`/`includes`, `weekend`, `inclusiveEndDates`.
   - Sections.
   - Tasks with tags, ids, `after`, `until` and durations.
   - Date arithmetic is plain Rust.
-  - Gaps: month names in `dateFormat`, and week numbers in `axisFormat`.
+  - Gap: moment's week-date and day-of-year tokens (`GGGG`, `WW`, `E`,
+    `DDDD`), which mermaid's dayjs cannot parse either.
 - **`timeline`**:
   - `LR`/`TD`;
   - sections;
@@ -473,8 +479,10 @@ self-loops, block groups and pinned notes):
 - **`journey`**: sections and `task: score: actors`, scored 0–5.
 - **`kanban`**:
   - columns and cards by indentation;
-  - `@{ assigned, ticket, priority }` metadata.
-  - Gap: card icons.
+  - `@{ assigned, ticket, priority, icon }` metadata, and `::icon()` and
+    `:::class` on their own line;
+  - an icon is drawn as a tag with its name; classes are stored, not drawn
+    (kanban has no `classDef`).
 
 **Trees and blocks** (`src/meta.rs` holds the shared title, accessibility and
 indentation helpers):
@@ -506,8 +514,13 @@ indentation helpers):
   - placement on a grid derived from the edges' sides, where mermaid uses
     fcose.
 - **`venn-beta`**:
-  - up to three sets with unions, text items and styles.
-  - Gap: four or more sets.
+  - sets, unions, text items and styles;
+  - one to three sets as circles, four as the classic four-ellipse diagram
+    with all fifteen regions, five or more as Euler circles relaxed so that
+    declared unions overlap and other pairs keep apart;
+  - a union or text whose region the layout cannot form is an error naming
+    it, never a dropped label.
+  - Gap: five or more sets where every pair intersects.
 - **`wardley-beta`**: the full grammar — components, anchors, links, flows,
   evolve, pipelines, notes, annotations, accelerators.
 - **`eventmodeling`**:
@@ -517,8 +530,22 @@ indentation helpers):
   - the validator's source-kind rules are errors.
 - **`info`**: draws "mmd <version>".
 
-**Not implemented:** `zenuml`, an external plugin with its own grammar (gap
-sample). `sequenceDiagram` draws the same kind of picture.
+**ZenUML:**
+
+- **`zenuml`** is mermaid's external plugin with a code-like grammar. Its
+  ANTLR grammar is not in the checkout, so it was parsed against mermaid's
+  ZenUML docs, demos and Cypress fixtures. `src/zenuml/` parses it into the
+  sequence model and draws it with the sequence layout:
+  - participants, `as` labels, stereotypes, annotators (`@Actor`,
+    `@Database`, …; cloud annotators become a «stereotype» line);
+  - `group { … }` and `@Starter(X)`;
+  - sync calls `A.m()`/`A->B.m()` with nested blocks as activations,
+    assignments and `return` as dashed replies, `new A()` as creation;
+  - async `A->B: text`, `@return`/`@reply`;
+  - `//` comments above a message as notes;
+  - `if`/`else if`/`else`, `while`/`for`/`forEach`/`loop`, `opt`, `par`,
+    `critical`, `try`/`catch`/`finally`.
+  - Gaps: `ref(…)` and `==dividers==`.
 
 ## Architecture
 
@@ -601,9 +628,9 @@ porting with attribution remains available if `dagre` is ever wanted.
 ## Roadmap
 
 Reviewed 2026-10-25 against the upstream checkout in `mermaid/` (92dc556,
-2026-05-01). **32 of the 33 diagram types render**; `zenuml` is an external
-plugin and is out of scope. The showcase's first page is the live coverage
-matrix: per type, its samples, gaps and recorded approximations.
+2026-05-01). **All 33 diagram types render.** The showcase's first page is
+the live coverage matrix: per type, its samples, gaps and recorded
+approximations.
 
 What remains is of three kinds, in priority order.
 
@@ -615,13 +642,18 @@ failing; move the file into `examples/`.
 
 | Gap | Notes |
 |:---|:---|
-| `gantt` month names in `dateFormat` (`MMM`, `Do`, `A`, `Z`) | Needs English month and day-name parsing. |
-| `gantt` week numbers in `axisFormat` (`%U`, `%W`, `%V`) | ISO week arithmetic. |
-| `sequenceDiagram` decimal `autonumber` | Small. |
-| `stateDiagram` composite body on its `{` line | Needs a statement splitter that understands braces. |
-| `kanban` card icons | Needs icons; see 3. |
-| `venn-beta` with four or more sets | Needs venn.js-style area-proportional layout. |
-| `zenuml` | External plugin. Not planned. |
+| `zenuml` `ref(…)` | A reference frame to another diagram. |
+| `zenuml` `==divider==` | A full-width divider; the sequence model has none yet. |
+| `gantt` week-date tokens (`GGGG`, `WW`, `E`, `DDDD`) | Mermaid's dayjs cannot parse these either. |
+| `venn-beta` with five or more sets where every pair intersects | Circles cannot give every pair its own region; needs venn.js's general layout, or ellipses beyond four sets. |
+
+Closed on 2026-10-25:
+- gantt month names and week numbers;
+- decimal `autonumber`;
+- inline state composites;
+- kanban card icons;
+- venn with four or more sets;
+- `zenuml` itself.
 
 ### 2. Approximations worth narrowing
 

@@ -296,7 +296,7 @@ impl<'a> Parser<'a> {
             return self.declare(None, top);
         }
         if self.rest().starts_with("==") {
-            return Err(self.err("dividers (`==…==`) are not supported in zenuml"));
+            return Err(self.err("dividers (`==…==`) are not supported in zenuml (see DESIGN.md)"));
         }
         match self.word() {
             "title" if top => {
@@ -323,9 +323,9 @@ impl<'a> Parser<'a> {
             }
             "try" => self.try_catch(),
             "return" => self.ret(),
-            word @ ("ref" | "section") => {
-                Err(self.err(format!("`{word}` is not supported in zenuml")))
-            }
+            word @ ("ref" | "section") => Err(self.err(format!(
+                "`{word}` is not supported in zenuml (see DESIGN.md)"
+            ))),
             word @ ("else" | "catch" | "finally") => {
                 let opener = if word == "else" { "if" } else { "try" };
                 Err(self.err(format!("`{word}` without a preceding `{opener} {{ … }}`")))
@@ -389,12 +389,12 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some('#') => {
                 return Err(self.err(format!(
-                    "participant colours (`{id} #…`) are not supported in zenuml"
+                    "participant colours (`{id} #…`) are not supported in zenuml (see DESIGN.md)"
                 )));
             }
             Some(c) if c.is_ascii_digit() => {
                 return Err(self.err(format!(
-                    "participant widths (`{id} {}`) are not supported in zenuml",
+                    "participant widths (`{id} {}`) are not supported in zenuml (see DESIGN.md)",
                     self.word()
                 )));
             }

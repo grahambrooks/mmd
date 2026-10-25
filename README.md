@@ -4,8 +4,8 @@ Render [Mermaid](https://mermaid.js.org) diagrams to SVG, for web and PDF
 publication. Pure Rust: no Node, no browser, no JavaScript runtime, no C
 toolchain.
 
-> **Status:** early development, released as CalVer builds. 32 of mermaid's
-> 33 diagram types render — every one except the external `zenuml` plugin.
+> **Status:** early development, released as CalVer builds. All 33 of
+> mermaid's diagram types render, including the external `zenuml` plugin.
 > Coverage comes before accuracy: where a drawing knowingly differs from
 > mermaid's, the sample says so. See [DESIGN.md](DESIGN.md) for the exact
 > syntax and the [roadmap](DESIGN.md#roadmap) for what remains.
@@ -58,7 +58,7 @@ mmd = { version = "*", default-features = false }
 |:---|:---|
 | Graphs | `flowchart`/`graph` (every v11 shape), `stateDiagram-v2`, `classDiagram`, `erDiagram`, `requirementDiagram`, `block` |
 | Architecture | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`, `architecture-beta` |
-| Interactions | `sequenceDiagram`, `gitGraph`, `eventmodeling` |
+| Interactions | `sequenceDiagram`, `zenuml`, `gitGraph`, `eventmodeling` |
 | Time | `gantt`, `timeline`, `journey`, `kanban` |
 | Charts | `pie`, `xychart`, `quadrantChart`, `radar-beta`, `sankey` |
 | Trees and maps | `mindmap`, `treemap`, `treeView-beta`, `ishikawa`, `packet`, `venn-beta`, `wardley-beta` |
@@ -77,7 +77,7 @@ line** — never a silently missing element:
 
 ```console
 $ mmd notes.mmd
-mmd: team.mmd: line 7: a venn diagram of more than 3 sets is not supported (see DESIGN.md)
+mmd: flow.mmd: line 5: dividers (`==…==`) are not supported in zenuml (see DESIGN.md)
 ```
 
 Adding a diagram type is a self-contained module: parse and layout to a
