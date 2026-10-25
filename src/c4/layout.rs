@@ -263,6 +263,7 @@ pub fn layout(model: &C4, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
 

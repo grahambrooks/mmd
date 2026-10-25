@@ -306,6 +306,7 @@ impl<'a> Layout<'a> {
                         line,
                         paint: Paint::Role(Role::Text),
                         backed: false,
+                        rotate: 0.0,
                     });
                     y += self.line_height;
                 }
@@ -581,6 +582,7 @@ impl<'a> Layout<'a> {
                 line: TextLine::new(line.clone(), Font::Body),
                 paint: Paint::Role(Role::Muted),
                 backed,
+                rotate: 0.0,
             });
             top += self.line_height;
         }
@@ -849,6 +851,7 @@ impl<'a> Layout<'a> {
                         line: TextLine::new(bracket(&label), Font::Body),
                         paint: Paint::Role(Role::Text),
                         backed,
+                        rotate: 0.0,
                     });
                 }
             }
@@ -930,6 +933,7 @@ impl<'a> Layout<'a> {
                 line: TextLine::new(line.clone(), Font::Body),
                 paint: Paint::Role(Role::Text),
                 backed: false,
+                rotate: 0.0,
             });
             y += self.line_height;
         }
@@ -1113,6 +1117,7 @@ impl<'a> Layout<'a> {
                 line: TextLine::new(title, Font::Title),
                 paint: Paint::Role(Role::Text),
                 backed: false,
+                rotate: 0.0,
             });
         }
         scene.width = width;

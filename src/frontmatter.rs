@@ -104,6 +104,7 @@ pub(crate) fn add_title(scene: &mut Scene, title: &str, measure: &dyn Measure) {
         line: TextLine::new(title, Font::Title),
         paint: Paint::Role(Role::Text),
         backed: false,
+        rotate: 0.0,
     };
     match scene.title {
         None => scene.title = Some(text),

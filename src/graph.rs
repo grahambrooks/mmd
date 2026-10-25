@@ -793,6 +793,7 @@ impl<'a> Ctx<'a> {
             line: line.clone(),
             paint: Paint::Role(Role::Text),
             backed: true,
+            rotate: 0.0,
         }
     }
 

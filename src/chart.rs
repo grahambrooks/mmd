@@ -174,6 +174,7 @@ pub(crate) fn text(pos: Point, anchor: Anchor, line: &str, font: Font, paint: Pa
         line: TextLine::new(line, font),
         paint,
         backed: false,
+        rotate: 0.0,
     }
 }
 

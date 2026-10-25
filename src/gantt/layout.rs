@@ -188,6 +188,7 @@ pub fn layout(gantt: &Gantt, measure: &dyn Measure) -> Scene {
             paint: Paint::Role(Role::Muted),
             // A `vert` marker's line passes behind its date.
             backed: true,
+            rotate: 0.0,
         });
     }
 
@@ -203,6 +204,7 @@ pub fn layout(gantt: &Gantt, measure: &dyn Measure) -> Scene {
                 line: TextLine::new(line.clone(), Font::Bold),
                 paint: Paint::Role(Role::Series(section_series(*section))),
                 backed: false,
+                rotate: 0.0,
             });
             y += line_height;
         }
@@ -261,6 +263,7 @@ pub fn layout(gantt: &Gantt, measure: &dyn Measure) -> Scene {
             line: TextLine::new(task.name.clone(), Font::Small),
             paint,
             backed: false,
+            rotate: 0.0,
         });
     }
 
@@ -296,6 +299,7 @@ pub fn layout(gantt: &Gantt, measure: &dyn Measure) -> Scene {
             line: TextLine::new(task.name.clone(), Font::Small),
             paint: Paint::Role(Role::Accent),
             backed: false,
+            rotate: 0.0,
         });
         right_edge = right_edge.max(x + half);
     }
@@ -317,6 +321,7 @@ pub fn layout(gantt: &Gantt, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         let title_width = measure.width(title, Font::Title.size(FONT_SIZE), true);
         if title_width + 2.0 * PADDING > scene.width {

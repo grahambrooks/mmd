@@ -214,6 +214,7 @@ pub fn layout(model: &Architecture, measure: &dyn Measure) -> Scene {
                         line: TextLine::new(title.clone(), Font::Body),
                         paint: Paint::Role(Role::Text),
                         backed: true,
+                        rotate: 0.0,
                     });
                 }
             }
@@ -291,6 +292,7 @@ pub fn layout(model: &Architecture, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
     scene.width = width;

@@ -262,6 +262,7 @@ pub fn layout(timeline: &Timeline, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
     scene

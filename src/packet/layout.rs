@@ -122,6 +122,7 @@ pub fn layout(packet: &Packet, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         top += line_height(size) + TITLE_GAP;
     }
@@ -133,6 +134,7 @@ pub fn layout(packet: &Packet, measure: &dyn Measure) -> Scene {
         line: TextLine::new(text, Font::Small),
         paint: Paint::Role(Role::Muted),
         backed: false,
+        rotate: 0.0,
     };
     for (piece, label) in pieces.iter().zip(labels) {
         let band = top + piece.row as f32 * pitch;

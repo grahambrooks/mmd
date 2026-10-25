@@ -63,6 +63,7 @@ pub fn layout(map: &Wardley, measure: &dyn Measure) -> Scene {
             line,
             paint,
             backed: false,
+            rotate: 0.0,
         });
     };
 
@@ -455,6 +456,7 @@ pub fn layout(map: &Wardley, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
     scene.width = full_width.max(width);

@@ -252,6 +252,7 @@ pub(crate) fn layout(s: &Sankey, measure: &dyn Measure) -> Scene {
             line,
             paint: Paint::Role(Role::Text),
             backed: true,
+            rotate: 0.0,
         });
     }
 

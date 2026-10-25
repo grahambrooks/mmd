@@ -383,6 +383,7 @@ impl Ctx<'_> {
                         line,
                         paint: Paint::Role(Role::Text),
                         backed: false,
+                        rotate: 0.0,
                     });
                 }
             }

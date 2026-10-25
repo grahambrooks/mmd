@@ -251,6 +251,7 @@ pub fn layout(er: &Er, measure: &dyn Measure) -> Scene {
                         text
                     },
                     backed: false,
+                    rotate: 0.0,
                 });
             }
         }

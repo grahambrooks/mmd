@@ -33,6 +33,7 @@ pub fn layout(map: &Treemap, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         top += line_height(size) + TITLE_GAP;
     }

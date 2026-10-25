@@ -18,7 +18,7 @@ bundled-fonts = ["dep:rustybuzz", "dep:typst-assets"]
 cli = ["dep:clap", "bundled-fonts"]
 
 [dependencies]
-diagram-scene = { git = "https://github.com/grahambrooks/diagram-scene", tag = "v2026.10.0" }
+diagram-scene = { git = "https://github.com/grahambrooks/diagram-scene", tag = "v2026.10.25" }
 rustybuzz = { version = "0.20", optional = true }
 typst-assets = { version = "0.15.1", features = ["fonts"], optional = true }
 clap = { version = "4.6", features = ["derive"], optional = true }

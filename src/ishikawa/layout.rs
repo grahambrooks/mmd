@@ -189,6 +189,7 @@ fn bone(category: &Cause, index: usize, upper: bool, measure: &dyn Measure) -> B
             line: TextLine::new(row.text.clone(), font),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         out.left = out.left.min(start);
         out.top = out.top.min(y - 5.0 - line_height(FONT_SIZE));

@@ -34,6 +34,7 @@ pub fn layout(tree: &TreeView, measure: &dyn Measure) -> Scene {
             line,
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         top += line_height(size) + TITLE_GAP;
     }
@@ -56,6 +57,7 @@ pub fn layout(tree: &TreeView, measure: &dyn Measure) -> Scene {
             line,
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
         scene.edges.push(line_edge(
             Point::new(x - STUB, y + row / 2.0),

@@ -89,6 +89,7 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
                 line: TextLine::new(line.clone(), Font::Bold),
                 paint: Paint::Role(Role::Text),
                 backed: false,
+                rotate: 0.0,
             });
         }
 
@@ -126,6 +127,7 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
                     line: TextLine::new(line.clone(), Font::Body),
                     paint: Paint::Role(Role::Text),
                     backed: false,
+                    rotate: 0.0,
                 });
                 baseline += line_height;
             }
@@ -159,6 +161,7 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
                         line: TextLine::new(ticket.clone(), Font::Small),
                         paint: Paint::Role(Role::Muted),
                         backed: false,
+                        rotate: 0.0,
                     });
                 }
                 if let Some(assigned) = &card.assigned {
@@ -168,6 +171,7 @@ pub fn layout(kanban: &Kanban, measure: &dyn Measure) -> Scene {
                         line: TextLine::new(assigned.clone(), Font::Small),
                         paint: Paint::Role(Role::Accent),
                         backed: false,
+                        rotate: 0.0,
                     });
                 }
             }

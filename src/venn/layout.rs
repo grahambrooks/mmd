@@ -352,6 +352,7 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
                 line: line.clone(),
                 paint: *paint,
                 backed: false,
+                rotate: 0.0,
             });
             text_regions.push(mask_of(&region.sets));
             top += line_height;
@@ -395,6 +396,7 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
                 line,
                 paint,
                 backed: false,
+                rotate: 0.0,
             });
             text_regions.push(0);
             top += line_height;
@@ -451,6 +453,7 @@ pub(crate) fn arrange(venn: &Venn, measure: &dyn Measure) -> Result<Arranged, Er
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
     scene.width = width;

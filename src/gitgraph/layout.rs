@@ -69,6 +69,7 @@ pub fn layout(graph: &GitGraph, measure: &dyn Measure) -> Scene {
             line: TextLine::new(title.clone(), Font::Title),
             paint: Paint::Role(Role::Text),
             backed: false,
+            rotate: 0.0,
         });
     }
     scene.width = width.max(200.0);
@@ -347,6 +348,7 @@ fn commit_label(ctx: &Ctx, index: usize, pos: Point, anchor: Anchor) -> Option<T
         paint: Paint::Role(Role::Muted),
         // Merge curves can cross a label.
         backed: true,
+        rotate: 0.0,
     })
 }
 
