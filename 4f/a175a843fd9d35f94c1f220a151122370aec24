@@ -1,0 +1,19 @@
+scripts/release.py
+  s_202b20e64578b0::t_8834a677171e73 42,72,95,129,138,224,245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4fa175a843fd9d35f94c1f220a151122370aec24",
+  "prompts": {},
+  "sessions": {
+    "s_202b20e64578b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_202b20e64578b0",
+        "model": "unknown"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
