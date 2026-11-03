@@ -1,92 +1,72 @@
-.PHONY: help build test lint fmt fmt-check check pre-commit showcase showcase-pages install uninstall clean update outdated release release-dry-run
+# mmd — Mermaid diagrams to SVG, in pure Rust. `make help` lists targets.
+# `make check` is the gate (the same commands as the ci.yml check job); prek runs it
+# before every push.
 
-VERSION := $(shell date +%Y.%-m.%-d)
-TAG := v$(VERSION)
 PREFIX ?= /usr/local
 
-all: help
+.DEFAULT_GOAL := help
 
-help:
-	@echo "mmd — Mermaid diagrams to SVG, in pure Rust"
-	@echo ""
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Development:"
-	@echo "  check            fmt-check + clippy + test (the pre-commit gate)"
-	@echo "  pre-commit       Alias for check; run before every commit"
-	@echo "  build            Build the release binary"
-	@echo "  test             Run all tests"
-	@echo "  lint             Run clippy with warnings denied"
-	@echo "  fmt              Format the code"
-	@echo "  showcase         Coverage matrix, samples and gaps into target/showcase.pdf"
-	@echo "  showcase-pages   Also render each page to target/showcase/pageN.png (macOS)"
-	@echo ""
-	@echo "Installation:"
-	@echo "  install          Build and install to $(PREFIX)/bin"
-	@echo "  uninstall        Remove from $(PREFIX)/bin"
-	@echo ""
-	@echo "Release:"
-	@echo "  release          Tag and push a CalVer release ($(TAG))"
-	@echo "  release-dry-run  Show what a release would do"
-	@echo ""
-	@echo "Maintenance:"
-	@echo "  update           Update dependencies"
-	@echo "  outdated         Show outdated dependencies"
-	@echo "  clean            Remove build artifacts"
+.PHONY: help check fmt fmt-check lint test build-no-default hooks pre-commit build showcase showcase-pages install uninstall update outdated clean
 
-build:
-	cargo build --release --features cli
+help: ## List targets
+	@grep -hE '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
-test:
-	cargo test --all-features
+# ── The gate ─────────────────────────────────────────────────────────────────
 
-lint:
-	cargo clippy --all-targets --all-features -- -D warnings
-
-fmt:
-	cargo fmt --all
-
-fmt-check:
-	cargo fmt --all -- --check
-
-check: fmt-check lint test
+check: fmt-check lint test build-no-default ## fmt-check + clippy + test + no-default build: exactly what CI's check job runs
 	@echo "All pre-commit checks passed."
 
-pre-commit: check
+pre-commit: check ## Alias for check
 
-showcase:
+fmt: ## Format the code
+	cargo fmt --all
+
+fmt-check: ## Check formatting without modifying
+	cargo fmt --all --check
+
+lint: ## Clippy with warnings denied
+	cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+test: ## Run all tests
+	cargo test --workspace --all-features --locked
+
+build-no-default: ## The library must stay usable without the bundled font payload
+	cargo build --no-default-features --locked
+
+hooks: ## Install the git hooks (pre-commit and pre-push) with prek
+	prek install
+
+# ── Build and showcase ───────────────────────────────────────────────────────
+
+build: ## Build the release binary
+	cargo build --release --features cli
+
+showcase: ## Coverage matrix, samples and gaps into target/showcase.pdf
 	cargo run --example showcase
 
-showcase-pages: showcase
+showcase-pages: showcase ## Also render each page to target/showcase/pageN.png (macOS)
 	swift scripts/showcase-pages.swift target/showcase.pdf target/showcase
 
-install: build
+install: build ## Build and install to $(PREFIX)/bin
 	install -d $(PREFIX)/bin
 	install -m 755 target/release/mmd $(PREFIX)/bin/mmd
 	@echo "Installed $(PREFIX)/bin/mmd"
 
-uninstall:
+uninstall: ## Remove from $(PREFIX)/bin
 	rm -f $(PREFIX)/bin/mmd
 
-update:
+# ── Maintenance ──────────────────────────────────────────────────────────────
+
+update: ## Update dependencies
 	cargo update
 
-outdated:
+outdated: ## Show outdated dependencies
 	cargo outdated --root-deps-only
 
-clean:
+clean: ## Remove build artifacts
 	cargo clean
 
-release-dry-run:
-	@echo "Would release $(TAG)"
-	@git status --porcelain
+# ── Release (release-kit): tag-only CalVer ───────────────────────────────────
 
-release: check
-	@test -z "$$(git status --porcelain)" || (echo "working tree is dirty" && exit 1)
-	sed -i '' 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml
-	cargo check --quiet
-	git add Cargo.toml Cargo.lock
-	git commit -m "Release $(VERSION)"
-	git tag -a $(TAG) -m "Release $(VERSION)"
-	git push origin main
-	git push origin $(TAG)
+include release.mk
