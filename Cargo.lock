@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "mmd"
-version = "2026.11.3"
+version = "2026.11.10"
 dependencies = [
  "clap",
  "diagram-scene",
